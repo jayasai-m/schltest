@@ -32,7 +32,6 @@ export const InspectorLayout = () => {
   const navItems = [
     { nameKey: 'dashboard', path: '/inspector/dashboard', icon: LayoutDashboard },
     { nameKey: 'mySchools', path: '/inspector/schools', icon: Building2 },
-    { nameKey: 'digitalTwin', path: '/inspector/digital-twin', icon: Box },
     { nameKey: 'waterQuality', path: '/inspector/water', icon: Droplets },
     { nameKey: 'mealKitchen', path: '/inspector/meals', icon: UtensilsCrossed },
     { nameKey: 'alerts', path: '/inspector/alerts', icon: AlertTriangle },

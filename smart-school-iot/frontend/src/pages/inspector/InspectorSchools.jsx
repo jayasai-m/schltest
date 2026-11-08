@@ -121,14 +121,6 @@ export const InspectorSchools = () => {
                   <span className="text-slate-300 font-mono text-[11px]">{s.phone}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Water Tank:</span>
-                  <span className="font-bold text-white">
-                    {s.latest_reading?.water_level_pct !== null && s.latest_reading?.water_level_pct !== undefined
-                      ? `${s.latest_reading.water_level_pct}% (${s.latest_reading.water_volume_litres} L)`
-                      : '--'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
                   <span className="text-slate-400">Turbidity:</span>
                   <span className="font-semibold text-white">
                     {s.latest_reading?.turbidity_ntu !== null && s.latest_reading?.turbidity_ntu !== undefined
@@ -153,11 +145,11 @@ export const InspectorSchools = () => {
               {/* Actions */}
               <div className="flex items-center space-x-2 pt-1">
                 <Link
-                  to={`/inspector/digital-twin?school_id=${s.id}`}
+                  to={`/inspector/water?school_id=${s.id}`}
                   className="flex-1 py-2 rounded-xl bg-teal-500/15 hover:bg-teal-500/25 text-teal-300 border border-teal-500/30 text-xs font-semibold text-center transition-colors flex items-center justify-center space-x-1"
                 >
                   <Droplets className="w-3.5 h-3.5" />
-                  <span>Digital Twin</span>
+                  <span>Water Quality</span>
                 </Link>
 
                 <Link

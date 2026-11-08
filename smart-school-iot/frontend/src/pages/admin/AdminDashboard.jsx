@@ -180,7 +180,6 @@ export const AdminDashboard = () => {
                 <th className="px-5 py-3 font-semibold">School Name & Code</th>
                 <th className="px-5 py-3 font-semibold">District</th>
                 <th className="px-5 py-3 font-semibold">Hardware Status</th>
-                <th className="px-5 py-3 font-semibold">Tank Level</th>
                 <th className="px-5 py-3 font-semibold">Water Turbidity</th>
                 <th className="px-5 py-3 font-semibold">Kitchen Humidity</th>
                 <th className="px-5 py-3 font-semibold text-right">Actions</th>
@@ -215,13 +214,6 @@ export const AdminDashboard = () => {
                           </>
                         )}
                       </span>
-                    </td>
-                    <td className="px-5 py-4 font-mono">
-                      {r && r.water_level_pct !== undefined ? (
-                        <span className="text-slate-200 font-bold">{r.water_level_pct}% ({r.water_volume_litres} L)</span>
-                      ) : (
-                        <span className="text-slate-500">--</span>
-                      )}
                     </td>
                     <td className="px-5 py-4 font-mono">
                       {r && r.turbidity_ntu !== undefined ? (

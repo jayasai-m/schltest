@@ -16,6 +16,7 @@ import {
 export const SchoolMeals = () => {
   const [data, setData] = useState({ meals: [], images: [], latest_sensor: null });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   
@@ -38,14 +39,25 @@ export const SchoolMeals = () => {
       console.error(err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
     fetchMeals();
-    const handleUploaded = () => fetchMeals();
+    // Auto-poll every 3.5 seconds so background CV updates and new uploads show automatically
+    const interval = setInterval(fetchMeals, 3500);
+
+    const handleUploaded = () => {
+      fetchMeals();
+      setTimeout(fetchMeals, 1500);
+      setTimeout(fetchMeals, 3500);
+    };
     window.addEventListener('meal_uploaded', handleUploaded);
-    return () => window.removeEventListener('meal_uploaded', handleUploaded);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('meal_uploaded', handleUploaded);
+    };
   }, []);
 
   const handleMealSubmit = async (e) => {
@@ -93,13 +105,25 @@ export const SchoolMeals = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setUploadModalOpen(true)}
-          className="flex items-center space-x-1.5 px-4 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-teal-500/20"
-        >
-          <Camera className="w-4 h-4" />
-          <span>+ Upload Inspection Photo</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => { setRefreshing(true); fetchMeals(); }}
+            disabled={refreshing}
+            className="flex items-center space-x-1.5 px-3 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl"
+            title="Refresh submissions"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-teal-400' : ''}`} />
+            <span>Refresh</span>
+          </button>
+
+          <button
+            onClick={() => setUploadModalOpen(true)}
+            className="flex items-center space-x-1.5 px-4 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-teal-500/20"
+          >
+            <Camera className="w-4 h-4" />
+            <span>+ Upload Inspection Photo</span>
+          </button>
+        </div>
       </div>
 
       {/* Grid: Meal Form & Kitchen Environmental Status */}
@@ -292,9 +316,14 @@ export const SchoolMeals = () => {
                       </span>
 
                       {/* Student Count Badge for Students Eating */}
-                      {img.category === 'STUDENT_EATING' && img.cv_student_count != null && (
-                        <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-violet-600/90 text-white border border-violet-400/40 shadow-md">
-                          👥 ~{img.cv_student_count} students
+                      {img.category === 'STUDENT_EATING' && (
+                        <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-violet-600/90 text-white border border-violet-400/40 shadow-md flex items-center space-x-1">
+                          <span>👥</span>
+                          <span>
+                            {img.cv_student_count != null
+                              ? `~${img.cv_student_count} students`
+                              : (img.status === 'PENDING_REVIEW' ? 'Counting students…' : '0 students')}
+                          </span>
                         </span>
                       )}
                     </div>

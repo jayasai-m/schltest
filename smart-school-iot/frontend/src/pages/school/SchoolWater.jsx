@@ -7,7 +7,9 @@ import {
   WifiOff,
   RefreshCw,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  Thermometer,
+  UtensilsCrossed
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -54,7 +56,7 @@ export const SchoolWater = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Water Quality & Tank Telemetry</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Drinking Water Quality Telemetry</h1>
           <p className="text-xs text-slate-400 mt-1">
             Real physical sensor metrics for {school?.name}
           </p>
@@ -107,47 +109,46 @@ export const SchoolWater = () => {
           </div>
         </div>
 
-        {/* Water Tank */}
+        {/* Kitchen Environment (DHT11) */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <h2 className="text-base font-bold text-white flex items-center space-x-2">
-              <Gauge className="w-5 h-5 text-teal-400" />
-              <span>Water Tank Reservoir</span>
+              <UtensilsCrossed className="w-5 h-5 text-amber-400" />
+              <span>Kitchen Environment (DHT11)</span>
             </h2>
-            <span className="text-xs text-slate-400 font-mono">Cap: {school?.tank_capacity_litres} L</span>
+            <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-semibold">Active Sensor</span>
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
-            <p className="text-xs text-slate-400">Water Volume</p>
-            <div className="flex items-baseline space-x-3 mt-1">
-              <span className="text-3xl font-extrabold text-white font-mono">
-                {hasData ? `${latest.water_level_pct}%` : '--'}
-              </span>
-              <span className="text-xs text-slate-400">
-                {hasData ? `(${latest.water_volume_litres} Litres)` : '(No Data Available)'}
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
-              <span className="text-slate-500">Ultrasonic Echo Status</span>
-              <p className="font-semibold text-slate-200 mt-0.5">
-                {hasData ? latest.ultrasonic_status : 'Disconnected'}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+              <p className="text-xs text-slate-400 flex items-center space-x-1">
+                <UtensilsCrossed className="w-3.5 h-3.5 text-amber-400" />
+                <span>Kitchen Humidity</span>
+              </p>
+              <div className="flex items-baseline space-x-2 mt-1">
+                <span className="text-2xl font-extrabold text-white font-mono">
+                  {hasData ? `${latest.humidity_pct}%` : '--'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1 font-medium">
+                {hasData ? `Status: ${latest.humidity_status}` : 'No Signal'}
               </p>
             </div>
-            <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
-              <span className="text-slate-500">Reserve Condition</span>
-              <p className="font-semibold text-slate-200 mt-0.5">
-                {hasData && latest.ultrasonic_status === 'LOW' ? (
-                  <span className="text-amber-400">Low Water Alert</span>
-                ) : hasData && latest.ultrasonic_status === 'OVERFLOW' ? (
-                  <span className="text-rose-400">Overflow Warning</span>
-                ) : hasData ? (
-                  <span className="text-emerald-400">Normal</span>
-                ) : (
-                  <span className="text-slate-500">--</span>
-                )}
+
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+              <p className="text-xs text-slate-400 flex items-center space-x-1">
+                <Thermometer className="w-3.5 h-3.5 text-rose-400" />
+                <span>Temperature</span>
+              </p>
+              <div className="flex items-baseline space-x-2 mt-1">
+                <span className="text-2xl font-extrabold text-white font-mono">
+                  {hasData && latest.temperature_c !== null && latest.temperature_c !== undefined
+                    ? `${latest.temperature_c}°C`
+                    : '--'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1 font-medium">
+                Ambient Environment
               </p>
             </div>
           </div>
@@ -171,8 +172,8 @@ export const SchoolWater = () => {
                 <XAxis dataKey="recorded_at" tickFormatter={(val) => new Date(val).toLocaleTimeString()} stroke="#64748b" fontSize={10} />
                 <YAxis stroke="#64748b" fontSize={10} />
                 <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155' }} />
-                <Line type="monotone" dataKey="water_level_pct" name="Water Level (%)" stroke="#14b8a6" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="turbidity_ntu" name="Turbidity (NTU)" stroke="#38bdf8" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="humidity_pct" name="Kitchen Humidity (%)" stroke="#f59e0b" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

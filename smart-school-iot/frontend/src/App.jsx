@@ -63,7 +63,7 @@ export default function App() {
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="/admin/dashboard" replace />} />
               <Route path="dashboard" element={<AdminDashboard />} />
-              <Route path="digital-twin" element={<AdminDigitalTwin />} />
+              <Route path="digital-twin" element={<Navigate to="/admin/water" replace />} />
               <Route path="water" element={<AdminWater />} />
               <Route path="meals" element={<AdminMeals />} />
               <Route path="schools" element={<AdminSchools />} />
@@ -82,7 +82,7 @@ export default function App() {
               <Route index element={<Navigate to="/inspector/dashboard" replace />} />
               <Route path="dashboard" element={<InspectorDashboard />} />
               <Route path="schools" element={<InspectorSchools />} />
-              <Route path="digital-twin" element={<InspectorDigitalTwin />} />
+              <Route path="digital-twin" element={<Navigate to="/inspector/water" replace />} />
               <Route path="water" element={<InspectorWater />} />
               <Route path="meals" element={<InspectorMeals />} />
               <Route path="alerts" element={<InspectorAlerts />} />
@@ -95,7 +95,7 @@ export default function App() {
             <Route path="/school" element={<SchoolLayout />}>
               <Route index element={<Navigate to="/school/dashboard" replace />} />
               <Route path="dashboard" element={<SchoolDashboard />} />
-              <Route path="digital-twin" element={<SchoolDigitalTwin />} />
+              <Route path="digital-twin" element={<Navigate to="/school/water" replace />} />
               <Route path="water" element={<SchoolWater />} />
               <Route path="meals" element={<SchoolMeals />} />
               <Route path="alerts" element={<SchoolAlerts />} />

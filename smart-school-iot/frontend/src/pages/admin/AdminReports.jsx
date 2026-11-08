@@ -108,18 +108,14 @@ export const AdminReports = () => {
               <thead className="bg-slate-950 text-slate-400 text-[11px] uppercase">
                 <tr>
                   <th className="px-4 py-2.5">Timestamp</th>
-                  <th className="px-4 py-2.5">Water Level</th>
-                  <th className="px-4 py-2.5">Litres</th>
-                  <th className="px-4 py-2.5">Turbidity</th>
-                  <th className="px-4 py-2.5">Humidity</th>
+                  <th className="px-4 py-2.5">Turbidity (NTU)</th>
+                  <th className="px-4 py-2.5">Kitchen Humidity</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {readings.map((r) => (
                   <tr key={r.id} className="font-mono text-slate-300">
                     <td className="px-4 py-2">{new Date(r.recorded_at).toLocaleString()}</td>
-                    <td className="px-4 py-2">{r.water_level_pct}%</td>
-                    <td className="px-4 py-2">{r.water_volume_litres} L</td>
                     <td className="px-4 py-2">{r.turbidity_ntu} NTU</td>
                     <td className="px-4 py-2">{r.humidity_pct}%</td>
                   </tr>

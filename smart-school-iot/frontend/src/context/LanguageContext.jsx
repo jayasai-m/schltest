@@ -6,8 +6,8 @@ export const translations = {
   en: {
     // Nav items
     dashboard: 'Dashboard',
-    digitalTwin: 'Digital Twin',
-    waterQuality: 'Water Quality & Tank',
+    digitalTwin: 'Water Quality',
+    waterQuality: 'Water Quality',
     mealKitchen: 'Meal & Kitchen Hygiene',
     multiSchool: 'Multi-School Hub',
     inspectors: 'Inspectors & Progress',
@@ -115,8 +115,8 @@ export const translations = {
   te: {
     // Nav items
     dashboard: 'డాష్‌బోర్డ్',
-    digitalTwin: 'డిజిటల్ ట్విన్',
-    waterQuality: 'నీటి నాణ్యత & ట్యాంకు',
+    digitalTwin: 'నీటి నాణ్యత',
+    waterQuality: 'నీటి నాణ్యత',
     mealKitchen: 'భోజనం & వంటగది పరిశుభ్రత',
     multiSchool: 'బహు-పాఠశాల కేంద్రం',
     inspectors: 'పరిశీలకులు & పురోగతి',
@@ -224,8 +224,8 @@ export const translations = {
   ta: {
     // Nav items
     dashboard: 'டாஷ்போர்டு',
-    digitalTwin: 'டிஜிட்டல் இரட்டை',
-    waterQuality: 'நீர் தரம் & தொட்டி',
+    digitalTwin: 'நீர் தரம்',
+    waterQuality: 'நீர் தரம்',
     mealKitchen: 'உணவு & சமையலறை சுகாதாரம்',
     multiSchool: 'பல-பள்ளி மையம்',
     inspectors: 'ஆய்வாளர்கள் & முன்னேற்றம்',

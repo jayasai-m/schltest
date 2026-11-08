@@ -10,12 +10,15 @@ import {
   RefreshCw,
   Filter,
   Users,
-  Brain
+  Brain,
+  ArrowLeft,
+  ArrowRight
 } from 'lucide-react';
 
 export const AdminMeals = () => {
   const [data, setData] = useState({ schools: [], images: [], meals: [] });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedSchoolId, setSelectedSchoolId] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
@@ -33,10 +36,15 @@ export const AdminMeals = () => {
       console.error('Error fetching meals:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  useEffect(() => { fetchMeals(); }, [selectedSchoolId, statusFilter]);
+  useEffect(() => {
+    fetchMeals();
+    const interval = setInterval(fetchMeals, 4000);
+    return () => clearInterval(interval);
+  }, [selectedSchoolId, statusFilter]);
 
   const handleReview = async (imageId, newStatus) => {
     setIsReviewing(true);
@@ -98,6 +106,16 @@ export const AdminMeals = () => {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => { setRefreshing(true); fetchMeals(); }}
+            disabled={refreshing}
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl"
+            title="Refresh submissions"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-teal-400' : ''}`} />
+            <span>Refresh</span>
+          </button>
+
           {/* School filter */}
           <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5">
             <Building2 className="w-4 h-4 text-teal-400" />
@@ -140,128 +158,229 @@ export const AdminMeals = () => {
         </div>
       </div>
 
-      {/* Image Gallery */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-white flex items-center space-x-2">
-            <UtensilsCrossed className="w-4 h-4 text-teal-400" />
-            <span>Staff Image Submissions ({images.length})</span>
-          </h2>
-          <span className="text-xs text-slate-400 flex items-center space-x-1">
-            <Brain className="w-3.5 h-3.5 text-violet-400" />
-            <span>CV auto-analysis active for Meal Prep &amp; Student Eating</span>
-          </span>
-        </div>
-
-        {images.length === 0 ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-xs text-slate-500 italic">
-            No Submissions Yet
+      {/* School-Wise Separation or Selected School Gallery */}
+      {!selectedSchoolId ? (
+        /* 1. School Directory Cards (When no school is selected) */
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2">
+            <div>
+              <h2 className="text-base font-bold text-white flex items-center space-x-2">
+                <Building2 className="w-5 h-5 text-teal-400" />
+                <span>Institutions &amp; Meal Monitoring Directory</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Click on any school below to view photos uploaded by that institution.
+              </p>
+            </div>
+            <span className="text-xs text-slate-400 font-mono bg-slate-900 border border-slate-800 px-3 py-1 rounded-xl">
+              {schools.length} Active Institutions
+            </span>
           </div>
-        ) : (
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {images.map((img) => (
-              <div
-                key={img.id}
-                className={`bg-slate-900 border rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between transition-colors ${cardBorder(img)}`}
-              >
-                <div>
-                  {/* Thumbnail */}
-                  <div className="relative h-48 bg-slate-950 overflow-hidden group">
-                    <img
-                      src={getImageUrl(img.image_url)}
-                      alt="Submission"
-                      onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMAGE; }}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <button
-                        onClick={() => { setSelectedImage(img); setReviewNotes(img.admin_notes || ''); }}
-                        className="px-3 py-1.5 rounded-lg bg-teal-500 text-slate-950 font-bold text-xs flex items-center space-x-1"
-                      >
-                        <Eye className="w-4 h-4" /><span>Inspect Full Photo</span>
-                      </button>
-                    </div>
+            {schools.map((s) => {
+              const schoolImages = images.filter((img) => img.school_id === s.id);
+              const totalCount = schoolImages.length;
+              const pendingCount = schoolImages.filter((img) => img.status === 'PENDING_REVIEW' || img.status === 'CV_PASS' || img.status === 'CV_FLAG').length;
+              const verifiedCount = schoolImages.filter((img) => img.status === 'VERIFIED').length;
 
-                    {/* Category badge */}
-                    <span className="absolute top-3 left-3 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-900/90 backdrop-blur-sm text-teal-300 border border-teal-500/30">
-                      {getCategoryLabel(img.category)}
-                    </span>
-
-                    {/* Status pill */}
-                    <span className={`absolute top-3 right-3 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusPill(img.status)}`}>
-                      {img.status}
-                    </span>
-
-                    {/* Student count badge */}
-                    {img.category === 'STUDENT_EATING' && (
-                      <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-violet-600/90 text-white border border-violet-400/40 flex items-center space-x-1 shadow-md">
-                        <Users className="w-3.5 h-3.5" />
-                        <span>~{img.cv_student_count ?? 0} students</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Metadata */}
-                  <div className="p-4 space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-white text-sm truncate">{img.school_name || 'School'}</span>
-                      <span className="text-[10px] text-slate-500 font-mono">
-                        {new Date(img.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-
-                    {img.meal_type && <p className="text-teal-400 font-medium">Menu: {img.meal_type}</p>}
-
-                    <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400 pt-1">
-                      <div>Staff: <span className="text-slate-200 font-medium">{img.staff_name || '--'}</span></div>
-                      <div>Shift: <span className="text-slate-200 font-medium">{img.inspection_shift || '--'}</span></div>
-                    </div>
-
-                    {/* CV inline note */}
-                    {img.cv_notes && (
-                      <div className={`mt-1.5 px-2.5 py-2 rounded-lg border text-[11px] ${
-                        img.cv_status === 'CV_PASS' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' :
-                        img.cv_status === 'CV_FLAG' ? 'bg-rose-500/10 border-rose-500/20 text-rose-300' :
-                        'bg-slate-800 border-slate-700 text-slate-400'
-                      }`}>
-                        <span className="font-semibold">🤖 CV: </span>{img.cv_notes}
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => setSelectedSchoolId(s.id.toString())}
+                  className="bg-slate-900 border border-slate-800 hover:border-teal-500/40 rounded-2xl p-5 shadow-lg cursor-pointer transition-all hover:bg-slate-850 hover:shadow-xl flex flex-col justify-between group"
+                >
+                  <div>
+                    <div className="flex items-start justify-between">
+                      <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 group-hover:scale-105 transition-transform">
+                        <Building2 className="w-5 h-5" />
                       </div>
-                    )}
+                      {pendingCount > 0 ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                          {pendingCount} Pending Review
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          {totalCount > 0 ? 'All Reviewed' : 'No Submissions'}
+                        </span>
+                      )}
+                    </div>
 
-                    {img.admin_notes && (
-                      <p className="text-[11px] text-teal-300 bg-teal-500/10 p-2 rounded-lg border border-teal-500/20">
-                        Admin Note: {img.admin_notes}
-                      </p>
-                    )}
+                    <h3 className="text-base font-bold text-white mt-4 group-hover:text-teal-300 transition-colors">
+                      {s.name}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      School ID: <span className="font-mono text-slate-300">#{s.id}</span>
+                    </p>
+
+                    <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-800/80 text-center">
+                      <div className="bg-slate-950/60 rounded-lg p-2 border border-slate-800">
+                        <span className="text-[10px] text-slate-500 block">Total</span>
+                        <span className="text-sm font-bold font-mono text-slate-200">{totalCount}</span>
+                      </div>
+                      <div className="bg-slate-950/60 rounded-lg p-2 border border-slate-800">
+                        <span className="text-[10px] text-amber-400/80 block">Pending</span>
+                        <span className="text-sm font-bold font-mono text-amber-300">{pendingCount}</span>
+                      </div>
+                      <div className="bg-slate-950/60 rounded-lg p-2 border border-slate-800">
+                        <span className="text-[10px] text-emerald-400/80 block">Verified</span>
+                        <span className="text-sm font-bold font-mono text-emerald-300">{verifiedCount}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs font-semibold text-teal-400 group-hover:text-teal-300">
+                    <span>View Uploaded Photos</span>
+                    <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
                   </div>
                 </div>
-
-                {/* Action bar */}
-                <div className="p-3 border-t border-slate-800 bg-slate-950/40 flex items-center justify-end space-x-2">
-                  <button
-                    onClick={() => { setSelectedImage(img); setReviewNotes(img.admin_notes || ''); }}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
-                  >
-                    Review
-                  </button>
-                  <button
-                    onClick={() => handleReview(img.id, 'VERIFIED')}
-                    className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center space-x-1"
-                  >
-                    <Check className="w-3.5 h-3.5" /><span>Verify</span>
-                  </button>
-                  <button
-                    onClick={() => handleReview(img.id, 'FLAGGED')}
-                    className="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 text-xs font-semibold flex items-center space-x-1"
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5" /><span>Flag</span>
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        /* 2. School-Specific Image Gallery (When a school is clicked) */
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-2xl gap-3 shadow-md">
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setSelectedSchoolId('')}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors border border-slate-700"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to All Schools</span>
+              </button>
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center space-x-2">
+                  <span>{schools.find((s) => s.id.toString() === selectedSchoolId.toString())?.name || 'Selected Institution'}</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/20 font-mono">
+                    {images.length} Submissions
+                  </span>
+                </h2>
+              </div>
+            </div>
+
+            <span className="text-xs text-slate-400 flex items-center space-x-1">
+              <Brain className="w-3.5 h-3.5 text-violet-400" />
+              <span>CV auto-analysis active for Meal Prep &amp; Student Eating</span>
+            </span>
+          </div>
+
+          {images.length === 0 ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-16 text-center text-xs text-slate-500 italic">
+              <UtensilsCrossed className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+              <p>No meal photo submissions uploaded by this school yet</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {images.map((img) => (
+                <div
+                  key={img.id}
+                  className={`bg-slate-900 border rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between transition-colors ${cardBorder(img)}`}
+                >
+                  <div>
+                    {/* Thumbnail */}
+                    <div className="relative h-48 bg-slate-950 overflow-hidden group">
+                      <img
+                        src={getImageUrl(img.image_url)}
+                        alt="Submission"
+                        onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMAGE; }}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button
+                          onClick={() => { setSelectedImage(img); setReviewNotes(img.admin_notes || ''); }}
+                          className="px-3 py-1.5 rounded-lg bg-teal-500 text-slate-950 font-bold text-xs flex items-center space-x-1"
+                        >
+                          <Eye className="w-4 h-4" /><span>Inspect Full Photo</span>
+                        </button>
+                      </div>
+
+                      {/* Category badge */}
+                      <span className="absolute top-3 left-3 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-900/90 backdrop-blur-sm text-teal-300 border border-teal-500/30">
+                        {getCategoryLabel(img.category)}
+                      </span>
+
+                      {/* Status pill */}
+                      <span className={`absolute top-3 right-3 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusPill(img.status)}`}>
+                        {img.status}
+                      </span>
+
+                      {/* Student count badge */}
+                      {img.category === 'STUDENT_EATING' && (
+                        <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-violet-600/90 text-white border border-violet-400/40 flex items-center space-x-1 shadow-md">
+                          <Users className="w-3.5 h-3.5" />
+                          <span>
+                            {img.cv_student_count != null
+                              ? `~${img.cv_student_count} students`
+                              : (img.status === 'PENDING_REVIEW' ? 'Counting students…' : '0 students')}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Metadata */}
+                    <div className="p-4 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-white text-sm truncate">{img.school_name || 'School'}</span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {new Date(img.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+
+                      {img.meal_type && <p className="text-teal-400 font-medium">Menu: {img.meal_type}</p>}
+
+                      <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400 pt-1">
+                        <div>Staff: <span className="text-slate-200 font-medium">{img.staff_name || '--'}</span></div>
+                        <div>Shift: <span className="text-slate-200 font-medium">{img.inspection_shift || '--'}</span></div>
+                      </div>
+
+                      {/* CV inline note */}
+                      {img.cv_notes && (
+                        <div className={`mt-1.5 px-2.5 py-2 rounded-lg border text-[11px] ${
+                          img.cv_status === 'CV_PASS' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' :
+                          img.cv_status === 'CV_FLAG' ? 'bg-rose-500/10 border-rose-500/20 text-rose-300' :
+                          'bg-slate-800 border-slate-700 text-slate-400'
+                        }`}>
+                          <span className="font-semibold">🤖 CV: </span>{img.cv_notes}
+                        </div>
+                      )}
+
+                      {img.admin_notes && (
+                        <p className="text-[11px] text-teal-300 bg-teal-500/10 p-2 rounded-lg border border-teal-500/20">
+                          Admin Note: {img.admin_notes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action bar */}
+                  <div className="p-3 border-t border-slate-800 bg-slate-950/40 flex items-center justify-end space-x-2">
+                    <button
+                      onClick={() => { setSelectedImage(img); setReviewNotes(img.admin_notes || ''); }}
+                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                    >
+                      Review
+                    </button>
+                    <button
+                      onClick={() => handleReview(img.id, 'VERIFIED')}
+                      className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center space-x-1"
+                    >
+                      <Check className="w-3.5 h-3.5" /><span>Verify</span>
+                    </button>
+                    <button
+                      onClick={() => handleReview(img.id, 'FLAGGED')}
+                      className="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 text-xs font-semibold flex items-center space-x-1"
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5" /><span>Flag</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Inspection Modal */}
       {selectedImage && (

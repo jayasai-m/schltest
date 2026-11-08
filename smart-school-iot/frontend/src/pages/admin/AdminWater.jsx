@@ -9,7 +9,9 @@ import {
   Building2,
   RefreshCw,
   Clock,
-  WifiOff
+  WifiOff,
+  UtensilsCrossed,
+  Thermometer
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -29,11 +31,7 @@ export const AdminWater = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [thresholds, setThresholds] = useState({
-    tank_capacity_litres: 2000,
-    tank_height_cm: 200,
     turbidity_threshold: 5.0,
-    low_water_threshold_pct: 20.0,
-    overflow_threshold_pct: 90.0
   });
 
   const fetchWater = async (schoolId) => {
@@ -44,11 +42,7 @@ export const AdminWater = () => {
       if (res.data.selected_school) {
         if (!selectedSchoolId) setSelectedSchoolId(res.data.selected_school.id);
         setThresholds({
-          tank_capacity_litres: res.data.selected_school.tank_capacity_litres,
-          tank_height_cm: res.data.selected_school.tank_height_cm,
-          turbidity_threshold: res.data.selected_school.turbidity_threshold,
-          low_water_threshold_pct: res.data.selected_school.low_water_threshold_pct,
-          overflow_threshold_pct: res.data.selected_school.overflow_threshold_pct
+          turbidity_threshold: res.data.selected_school.turbidity_threshold || 5.0,
         });
       }
     } catch (err) {
@@ -94,9 +88,9 @@ export const AdminWater = () => {
       {/* Top Header & School Selector */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Water Quality & Tank Monitoring</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Drinking Water Quality Monitoring</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Drinking-water turbidity (NTU) and ultrasonic water reservoir analytics
+            Real-time drinking-water optical turbidity (NTU) purity analysis & kitchen telemetry
           </p>
         </div>
 
@@ -145,7 +139,7 @@ export const AdminWater = () => {
             <span>Configurable Safety Thresholds – {school?.name}</span>
           </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs text-slate-400 mb-1">Turbidity Cutoff (NTU)</label>
               <input
@@ -155,29 +149,7 @@ export const AdminWater = () => {
                 onChange={(e) => setThresholds({ ...thresholds, turbidity_threshold: parseFloat(e.target.value) })}
                 className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-teal-500"
               />
-              <span className="text-[10px] text-slate-500">WHO safe limit &le; 5.0 NTU</span>
-            </div>
-
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Low Water Level (%)</label>
-              <input
-                type="number"
-                value={thresholds.low_water_threshold_pct}
-                onChange={(e) => setThresholds({ ...thresholds, low_water_threshold_pct: parseFloat(e.target.value) })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-teal-500"
-              />
-              <span className="text-[10px] text-slate-500">Triggers minimum reserve alert</span>
-            </div>
-
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Overflow Risk Level (%)</label>
-              <input
-                type="number"
-                value={thresholds.overflow_threshold_pct}
-                onChange={(e) => setThresholds({ ...thresholds, overflow_threshold_pct: parseFloat(e.target.value) })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:border-teal-500"
-              />
-              <span className="text-[10px] text-slate-500">Triggers tank overflow alarm</span>
+              <span className="text-[10px] text-slate-500">WHO safe limit &le; 5.0 NTU (Triggers High Turbidity Alert)</span>
             </div>
           </div>
 
@@ -247,49 +219,55 @@ export const AdminWater = () => {
           </div>
         </div>
 
-        {/* Section 2: Tank Monitoring */}
+        {/* Section 2: Kitchen Environmental Telemetry (DHT11) */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <div className="flex items-center space-x-2">
-              <Gauge className="w-5 h-5 text-teal-400" />
-              <h2 className="text-base font-bold text-white">Water Tank Level & Capacity</h2>
+              <UtensilsCrossed className="w-5 h-5 text-amber-400" />
+              <h2 className="text-base font-bold text-white">Kitchen Environment (DHT11)</h2>
             </div>
-            <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
-              Cap: {school?.tank_capacity_litres} L
+            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded">
+              Active Sensor
             </span>
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80">
-            <p className="text-xs text-slate-400">Current Water Volume</p>
-            <div className="flex items-baseline space-x-3 mt-1">
-              <span className="text-3xl font-extrabold text-white font-mono">
-                {hasData ? `${latest.water_level_pct}%` : '--'}
-              </span>
-              <span className="text-xs text-slate-400">
-                {hasData ? `(${latest.water_volume_litres} Litres)` : '(No Data Available)'}
-              </span>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80">
+              <p className="text-xs text-slate-400">Kitchen Humidity</p>
+              <div className="flex items-baseline space-x-2 mt-1">
+                <span className="text-3xl font-extrabold text-white font-mono">
+                  {hasData && latest.humidity_pct !== undefined ? `${latest.humidity_pct}%` : '--'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                {hasData ? `Status: ${latest.humidity_status || 'NORMAL'}` : 'No Signal'}
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800/80">
+              <p className="text-xs text-slate-400">Ambient Temperature</p>
+              <div className="flex items-baseline space-x-2 mt-1">
+                <span className="text-3xl font-extrabold text-white font-mono">
+                  {hasData && latest.temperature_c !== null && latest.temperature_c !== undefined
+                    ? `${latest.temperature_c}°C`
+                    : '--'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">Kitchen Atmosphere</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="p-3 rounded-lg bg-slate-950/40 border border-slate-800">
-              <span className="text-slate-500">Ultrasonic Sensor</span>
+              <span className="text-slate-500">Sensor Status</span>
               <p className="font-semibold text-slate-200 mt-0.5">
-                {hasData ? `${latest.ultrasonic_status}` : 'Disconnected'}
+                {isConnected ? 'Telemetry Active' : 'Disconnected'}
               </p>
             </div>
             <div className="p-3 rounded-lg bg-slate-950/40 border border-slate-800">
-              <span className="text-slate-500">Low / Overflow Flags</span>
-              <p className="font-semibold text-slate-200 mt-0.5">
-                {hasData && latest.ultrasonic_status === 'LOW' ? (
-                  <span className="text-amber-400">Low Water Alert</span>
-                ) : hasData && latest.ultrasonic_status === 'OVERFLOW' ? (
-                  <span className="text-rose-400">Overflow Alert</span>
-                ) : hasData ? (
-                  <span className="text-emerald-400">Normal Range</span>
-                ) : (
-                  <span className="text-slate-500">--</span>
-                )}
+              <span className="text-slate-500">Hygiene Standard</span>
+              <p className="font-semibold text-emerald-400 mt-0.5">
+                {hasData && latest.humidity_pct <= 70 ? 'Optimal Dryness' : hasData ? 'High Moisture' : '--'}
               </p>
             </div>
           </div>
@@ -321,8 +299,8 @@ export const AdminWater = () => {
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155' }}
                   labelFormatter={(val) => new Date(val).toLocaleString()}
                 />
-                <Line type="monotone" dataKey="water_level_pct" name="Water Level (%)" stroke="#14b8a6" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="turbidity_ntu" name="Turbidity (NTU)" stroke="#38bdf8" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="humidity_pct" name="Kitchen Humidity (%)" stroke="#f59e0b" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

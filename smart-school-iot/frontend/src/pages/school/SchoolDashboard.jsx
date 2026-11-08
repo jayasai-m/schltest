@@ -12,7 +12,8 @@ import {
   Clock,
   RefreshCw,
   PlusCircle,
-  CheckCircle2
+  CheckCircle2,
+  Thermometer
 } from 'lucide-react';
 import { StaffUploadModal } from '../../components/StaffUploadModal';
 
@@ -114,25 +115,6 @@ export const SchoolDashboard = () => {
           </p>
         </div>
 
-        {/* Water Tank Level */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>{t('waterLevel')}</span>
-            <Gauge className="w-4 h-4 text-teal-400" />
-          </div>
-          <div className="mt-3 flex items-baseline space-x-2">
-            <span className="text-3xl font-extrabold text-white font-mono">
-              {hasSensorData ? `${latest_reading.water_level_pct}%` : '--'}
-            </span>
-            <span className="text-xs text-slate-400">
-              {hasSensorData ? `(${latest_reading.water_volume_litres} L)` : `(${t('noData')})`}
-            </span>
-          </div>
-          <p className="text-[11px] text-slate-500 mt-1">
-            Capacity: {school?.tank_capacity_litres} Litres
-          </p>
-        </div>
-
         {/* Drinking Water Turbidity */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
           <div className="flex items-center justify-between text-xs text-slate-400">
@@ -168,6 +150,24 @@ export const SchoolDashboard = () => {
           </div>
           <p className="text-[11px] text-slate-500 mt-1">
             {hasSensorData ? `Status: ${latest_reading.humidity_status}` : t('noData')}
+          </p>
+        </div>
+
+        {/* Kitchen Temperature (DHT11) */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span>Kitchen Temperature</span>
+            <Thermometer className="w-4 h-4 text-rose-400" />
+          </div>
+          <div className="mt-3 flex items-baseline space-x-2">
+            <span className="text-3xl font-extrabold text-white font-mono">
+              {hasSensorData && latest_reading.temperature_c !== null && latest_reading.temperature_c !== undefined
+                ? `${latest_reading.temperature_c}°C`
+                : '--'}
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">
+            {hasSensorData ? 'DHT11 Physical Thermal Sensor' : t('noData')}
           </p>
         </div>
       </div>

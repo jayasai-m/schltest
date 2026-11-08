@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { adminService } from '../../services/api';
-import { WaterTankDigitalTwin } from '../../components/WaterTankDigitalTwin';
 import {
   Building2,
   Phone,
@@ -13,7 +12,11 @@ import {
   UtensilsCrossed,
   ArrowLeft,
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  Droplets,
+  Wifi,
+  WifiOff,
+  ArrowRight
 } from 'lucide-react';
 
 export const AdminSchoolDetails = () => {
@@ -115,16 +118,101 @@ export const AdminSchoolDetails = () => {
         </div>
       </div>
 
-      {/* Digital Twin Widget for This School */}
-      <WaterTankDigitalTwin
-        schoolName={school.name}
-        tankCapacity={school.tank_capacity_litres}
-        tankHeight={school.tank_height_cm}
-        sensorData={latest_reading}
-        hardwareStatus={hardware.status}
-        hardwareLabel={hardware.label}
-        lastUpdate={school.last_hardware_ping}
-      />
+      {/* Water Quality & Kitchen Telemetry Card */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-3">
+          <div>
+            <div className="flex items-center space-x-2">
+              <Droplets className="w-5 h-5 text-cyan-400" />
+              <h3 className="text-lg font-bold text-slate-100">Drinking Water Quality & Environmental Telemetry</h3>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Live physical sensor readings from ESP32 node for <span className="text-slate-200 font-medium">{school.name}</span>
+            </p>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <span className={`inline-flex items-center px-3 py-1.5 rounded-xl border text-xs font-semibold ${
+              hardware.status === 'CONNECTED'
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                : 'bg-slate-800/60 border-slate-700 text-slate-400'
+            }`}>
+              {hardware.status === 'CONNECTED' ? (
+                <>
+                  <Wifi className="w-3.5 h-3.5 mr-1.5 text-emerald-400" />
+                  <span>{hardware.label}</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
+                  <span>{hardware.label}</span>
+                </>
+              )}
+            </span>
+
+            <Link
+              to={`/admin/water?school_id=${school.id}`}
+              className="inline-flex items-center space-x-1 px-3 py-1.5 bg-teal-500/15 hover:bg-teal-500/25 border border-teal-500/30 text-teal-300 rounded-xl text-xs font-semibold transition-colors"
+            >
+              <span>Full Analytics</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800">
+            <p className="text-xs text-slate-400 flex items-center space-x-1.5">
+              <Droplets className="w-4 h-4 text-cyan-400" />
+              <span>Turbidity Reading</span>
+            </p>
+            <div className="flex items-baseline space-x-2 mt-2">
+              <span className="text-2xl font-extrabold text-white font-mono">
+                {latest_reading?.turbidity_ntu !== undefined ? `${latest_reading.turbidity_ntu} NTU` : '--'}
+              </span>
+            </div>
+            <p className={`text-[11px] font-semibold mt-1 ${
+              latest_reading?.turbidity_status === 'GOOD' ? 'text-emerald-400' :
+              latest_reading?.turbidity_status === 'MODERATE' ? 'text-amber-400' :
+              latest_reading?.turbidity_status === 'POOR' ? 'text-rose-400' : 'text-slate-500'
+            }`}>
+              {latest_reading ? `Purity: ${latest_reading.turbidity_status}` : 'No Telemetry'}
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800">
+            <p className="text-xs text-slate-400 flex items-center space-x-1.5">
+              <UtensilsCrossed className="w-4 h-4 text-amber-400" />
+              <span>Kitchen Humidity</span>
+            </p>
+            <div className="flex items-baseline space-x-2 mt-2">
+              <span className="text-2xl font-extrabold text-white font-mono">
+                {latest_reading?.humidity_pct !== undefined ? `${latest_reading.humidity_pct}%` : '--'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1">
+              {latest_reading ? `Status: ${latest_reading.humidity_status}` : 'No Telemetry'}
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800">
+            <p className="text-xs text-slate-400 flex items-center space-x-1.5">
+              <AlertTriangle className="w-4 h-4 text-rose-400" />
+              <span>Kitchen Temperature</span>
+            </p>
+            <div className="flex items-baseline space-x-2 mt-2">
+              <span className="text-2xl font-extrabold text-white font-mono">
+                {latest_reading?.temperature_c !== null && latest_reading?.temperature_c !== undefined
+                  ? `${latest_reading.temperature_c}°C`
+                  : '--'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Ambient Temperature (DHT11)
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

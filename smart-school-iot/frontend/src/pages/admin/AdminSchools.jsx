@@ -58,7 +58,7 @@ export const AdminSchools = () => {
                 <th className="px-5 py-3.5 font-semibold">Location</th>
                 <th className="px-5 py-3.5 font-semibold">Account Status</th>
                 <th className="px-5 py-3.5 font-semibold">Hardware Link</th>
-                <th className="px-5 py-3.5 font-semibold">Live Tank Level</th>
+                <th className="px-5 py-3.5 font-semibold">Water Turbidity</th>
                 <th className="px-5 py-3.5 font-semibold">Active Alerts</th>
                 <th className="px-5 py-3.5 font-semibold text-right">Action</th>
               </tr>
@@ -106,7 +106,7 @@ export const AdminSchools = () => {
                       </span>
                     </td>
                     <td className="px-5 py-4 font-mono text-slate-200">
-                      {r && r.water_level_pct !== undefined ? `${r.water_level_pct}% (${r.water_volume_litres} L)` : '--'}
+                      {r && r.turbidity_ntu !== undefined ? `${r.turbidity_ntu} NTU` : '--'}
                     </td>
                     <td className="px-5 py-4">
                       {s.active_alerts_count > 0 ? (

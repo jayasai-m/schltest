@@ -9,11 +9,11 @@ class SensorReading(Base):
     id = Column(Integer, primary_key=True, index=True)
     school_id = Column(Integer, ForeignKey("schools.id"), nullable=False, index=True)
     
-    # Ultrasonic Water Tank Readings
-    distance_cm = Column(Float, nullable=False) # raw physical echo distance
-    water_level_pct = Column(Float, nullable=False) # calculated percentage (0-100)
-    water_volume_litres = Column(Float, nullable=False) # calculated litres based on tank capacity
-    ultrasonic_status = Column(String(50), default="NORMAL") # NORMAL, LOW, OVERFLOW, ERROR
+    # Ultrasonic Water Tank Readings (Optional / Disabled if ultrasonic sensor is removed)
+    distance_cm = Column(Float, nullable=True) # raw physical echo distance
+    water_level_pct = Column(Float, nullable=True) # calculated percentage (0-100)
+    water_volume_litres = Column(Float, nullable=True) # calculated litres based on tank capacity
+    ultrasonic_status = Column(String(50), default="N/A", nullable=True) # NORMAL, LOW, OVERFLOW, ERROR, N/A
     
     # Turbidity Readings
     turbidity_ntu = Column(Float, nullable=False) # NTU value

@@ -80,7 +80,7 @@ class TelemetryIngest(BaseModel):
     api_key: Optional[str] = None
     school_id: Optional[int] = None
     device_id: Optional[str] = "ESP32-WATER-MONITOR"
-    distance_cm: float
+    distance_cm: Optional[float] = None
     turbidity_ntu: float
     turbidity_voltage: Optional[float] = None
     humidity_pct: float
@@ -95,10 +95,10 @@ class TelemetryResponse(BaseModel):
 class SensorReadingResponse(BaseModel):
     id: int
     school_id: int
-    distance_cm: float
-    water_level_pct: float
-    water_volume_litres: float
-    ultrasonic_status: str
+    distance_cm: Optional[float] = None
+    water_level_pct: Optional[float] = None
+    water_volume_litres: Optional[float] = None
+    ultrasonic_status: Optional[str] = "N/A"
     turbidity_ntu: float
     turbidity_voltage: Optional[float] = None
     turbidity_status: str

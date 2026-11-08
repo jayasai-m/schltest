@@ -12,7 +12,9 @@ if is_vercel:
     db_file = os.path.join(tmp_dir, "smart_school.db").replace("\\", "/")
     default_db = f"sqlite:///{db_file}"
 else:
-    default_db = "sqlite:///smart_school.db"
+    backend_base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    db_file = os.path.join(backend_base_dir, "smart_school.db").replace("\\", "/")
+    default_db = f"sqlite:///{db_file}"
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL or (is_vercel and "localhost" in DATABASE_URL):

@@ -1,143 +1,218 @@
 /*
  * ============================================================
- * SmartSchoolIoT – Government School Water & Mid-Day Meal Monitoring System
- * ESP32 Hardware Firmware
+ * SmartSchoolIoT – Government School Water Quality & Kitchen Station
+ * ESP32 Hardware Firmware (Configured from verified hardware code)
  * ============================================================
+ * Sensors Connected:
+ * 1. DHT22 Temperature & Humidity on GPIO 4
+ * 2. Turbidity Sensor on GPIO 34 (with 2x 10k resistor voltage divider)
  * 
- * Hardware Attached:
- * 1. Ultrasonic Sensor (HC-SR04 / JSN-SR04T) -> Water Level Measurement
- * 2. Turbidity Sensor (Analog Optical)        -> Drinking Water Quality Monitoring
- * 3. Humidity Sensor (DHT11 / DHT22)          -> Kitchen Humidity Monitoring
- * 4. Active Buzzer                            -> Real Threshold Alarm
- * 5. ESP32 Dev Board                          -> WiFi Telemetry & HTTP Client
+ * Features:
+ * - Local WiFi Web Dashboard (http://<ESP32_IP>/)
+ * - Automatic Telemetry POST to SmartSchoolIoT Server (http://10.0.73.115:8000)
+ * ============================================================
  */
 
 #include <WiFi.h>
+#include <WebServer.h>
 #include <HTTPClient.h>
 #include <DHT.h>
 #include "config.h"
 
-// Initialize DHT Sensor
+// Initialize DHT Sensor (DHT22 on GPIO 4)
 DHT dht(PIN_DHT, DHT_TYPE);
 
-// Tracking timestamps
-unsigned long lastSampleTime = 0;
-bool buzzerActive = false;
+// On-board web server for local dashboard
+WebServer server(80);
+
+// Sensor values
+float temperature = NAN;
+float humidity = NAN;
+float turbidityVoltage = 0.0;
+float turbidityNtu = 0.0;
+int turbidityRaw = 0;
+
+unsigned long previousRead = 0;
+const unsigned long interval = SAMPLING_INTERVAL_MS;
 
 // ------------------------------------------------------------
-// Helper: Measure Ultrasonic Distance (in cm) with Noise Filtering
+// Helper: Calculate NTU from calibrated sensor voltage
 // ------------------------------------------------------------
-float readUltrasonicDistance() {
-  float readings[ULTRASONIC_SAMPLES];
-  int validCount = 0;
-
-  for (int i = 0; i < ULTRASONIC_SAMPLES; i++) {
-    // Clear trigger pin
-    digitalWrite(PIN_TRIG, LOW);
-    delayMicroseconds(2);
-
-    // Send 10us ultrasonic pulse
-    digitalWrite(PIN_TRIG, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(PIN_TRIG, LOW);
-
-    // Read echo pulse duration (timeout: 30ms ~ 5 meters max)
-    unsigned long duration = pulseIn(PIN_ECHO, HIGH, 30000);
-
-    if (duration > 0) {
-      // Speed of sound: 343 m/s = 0.0343 cm/microsecond
-      // Distance = (duration * 0.0343) / 2
-      float distance = (duration * 0.0343) / 2.0;
-      if (distance >= 2.0 && distance <= 400.0) {
-        readings[validCount++] = distance;
-      }
-    }
-    delay(20);
-  }
-
-  if (validCount == 0) {
-    // Return error code indicating sensor read failure
-    return -1.0;
-  }
-
-  // Simple bubble sort to extract median value
-  for (int i = 0; i < validCount - 1; i++) {
-    for (int j = 0; j < validCount - i - 1; j++) {
-      if (readings[j] > readings[j + 1]) {
-        float temp = readings[j];
-        readings[j] = readings[j + 1];
-        readings[j + 1] = temp;
-      }
-    }
-  }
-
-  return readings[validCount / 2];
-}
-
-// ------------------------------------------------------------
-// Helper: Read Turbidity Sensor (Voltage & NTU Calculation)
-// ------------------------------------------------------------
-void readTurbidity(float &voltageOut, float &ntuOut) {
-  // ESP32 ADC: 12-bit (0 - 4095) with ~3.3V reference
-  int rawAnalog = analogRead(PIN_TURBIDITY);
-  
-  // Convert ADC value to voltage
-  float voltage = (rawAnalog / 4095.0) * 3.3;
-  voltageOut = voltage;
-
-  // Turbidity Sensor Characteristic Equation:
-  // Most turbidity sensors output ~4.0V - 4.5V for pure clean water (scaled through divider to ~2.5V-3.0V on ESP32)
-  // When water becomes muddy/turbid, light is blocked, causing output voltage to drop.
-  // Standard polynomial calibration curve:
-  // NTU = -1120.4 * (V^2) + 5742.3 * V - 4352.9
-  // Note: For bench testing without fluid, reading maps to clear water.
-  if (voltage < 1.0) {
-    ntuOut = 1000.0; // Extremely turbid/muddy water
-  } else if (voltage >= 2.8) {
-    ntuOut = 0.5; // Clear drinking water (<1 NTU)
+float calculateNTU(float volt) {
+  // Turbidity sensor (with 5V VCC and 2:1 resistor divider):
+  // When in clear drinking water, sensor outputs ~3.8V - 4.3V actual voltage
+  // As water gets cloudier / muddier, optical blockage drops voltage below 3.0V
+  if (volt >= 3.80) {
+    return 0.5; // Crystal clear drinking water (< 1.0 NTU)
+  } else if (volt <= 2.20) {
+    return 150.0; // Muddy water
   } else {
-    // Approximate linear interpolation between 2.8V (0.5 NTU) and 1.0V (50.0 NTU)
-    ntuOut = (2.8 - voltage) * (50.0 / 1.8);
-    if (ntuOut < 0.0) ntuOut = 0.0;
+    // Proportional turbidity curve between 3.8V (0.5 NTU) and 2.2V (100 NTU)
+    float ntu = 0.5 + ((3.80 - volt) / (3.80 - 2.20)) * 100.0;
+    if (ntu < 0.0) ntu = 0.0;
+    return ntu;
   }
 }
 
 // ------------------------------------------------------------
-// Helper: Read Kitchen Humidity
+// Read Sensors (matching friend's verified hardware configuration)
 // ------------------------------------------------------------
-bool readKitchenHumidity(float &humidity, float &temperature) {
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
+void readSensors() {
+  humidity = dht.readHumidity();
+  temperature = dht.readTemperature();
 
-  if (isnan(h)) {
-    humidity = -1.0;
-    temperature = -1.0;
-    return false;
+  // Average 20 ADC readings
+  long total = 0;
+  long mvTotal = 0;
+  for (int i = 0; i < 20; i++) {
+    total += analogRead(PIN_TURBIDITY);
+    mvTotal += analogReadMilliVolts(PIN_TURBIDITY);
+    delay(5);
   }
 
-  humidity = h;
-  temperature = isnan(t) ? -1.0 : t;
-  return true;
+  turbidityRaw = total / 20;
+
+  // ADC voltage at GPIO34 (using factory calibrated eFuse curve)
+  float adcVoltage = (mvTotal / 20.0) / 1000.0;
+  if (adcVoltage <= 0.05 && turbidityRaw > 50) {
+    adcVoltage = (turbidityRaw / 4095.0) * 3.3;
+  }
+
+  // Two equal 10k resistors:
+  // Actual sensor voltage = ADC voltage x 2
+  turbidityVoltage = adcVoltage * VOLTAGE_DIVIDER_FACTOR;
+
+  // Calculate NTU
+  turbidityNtu = calculateNTU(turbidityVoltage);
+
+  // Serial Diagnostic Output
+  Serial.println("-------------------------------------------------------");
+  Serial.print("Temperature:       ");
+  if (isnan(temperature)) Serial.println("DHT Read Error");
+  else { Serial.print(temperature, 1); Serial.println(" °C"); }
+
+  Serial.print("Humidity:          ");
+  if (isnan(humidity)) Serial.println("DHT Read Error");
+  else { Serial.print(humidity, 1); Serial.println(" %"); }
+
+  Serial.print("Turbidity Raw ADC: ");
+  Serial.println(turbidityRaw);
+
+  Serial.print("Turbidity Voltage: ");
+  Serial.print(turbidityVoltage, 3);
+  Serial.println(" V");
+
+  Serial.print("Turbidity Purity:  ");
+  Serial.print(turbidityNtu, 2);
+  Serial.println(" NTU");
 }
 
 // ------------------------------------------------------------
-// Helper: Sound Physical Buzzer for Abnormal Conditions
+// Send Telemetry to SmartSchoolIoT Server
 // ------------------------------------------------------------
-void setBuzzer(bool state, const char* reason) {
-  if (state) {
-    buzzerActive = true;
-    // Rapid audible beeping pattern
-    for (int i = 0; i < 3; i++) {
-      digitalWrite(PIN_BUZZER, HIGH);
-      delay(100);
-      digitalWrite(PIN_BUZZER, LOW);
-      delay(100);
-    }
-    Serial.printf("[ALERT] Physical Buzzer Triggered! Reason: %s\n", reason ? reason : "Threshold exceeded");
+void sendTelemetryToServer() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  HTTPClient http;
+  String endpoint = String(SERVER_HOST) + String(TELEMETRY_URL);
+  http.begin(endpoint);
+  http.addHeader("Content-Type", "application/json");
+
+  // Construct JSON payload
+  String jsonPayload = "{";
+  jsonPayload += "\"api_key\":\"" + String(HARDWARE_API_KEY) + "\",";
+  jsonPayload += "\"school_id\":" + String(SCHOOL_ID) + ",";
+  jsonPayload += "\"device_id\":\"" + String(DEVICE_ID) + "\",";
+  jsonPayload += "\"turbidity_ntu\":" + String(turbidityNtu, 2) + ",";
+  jsonPayload += "\"turbidity_voltage\":" + String(turbidityVoltage, 3) + ",";
+  jsonPayload += "\"humidity_pct\":" + (isnan(humidity) ? "0.0" : String(humidity, 1));
+
+  if (!isnan(temperature)) {
+    jsonPayload += ",\"temperature_c\":" + String(temperature, 1);
+  }
+  jsonPayload += "}";
+
+  int httpCode = http.POST(jsonPayload);
+  if (httpCode > 0) {
+    Serial.printf("[HTTP %d] Telemetry pushed to SmartSchoolIoT server\n", httpCode);
   } else {
-    buzzerActive = false;
-    digitalWrite(PIN_BUZZER, LOW);
+    Serial.printf("[HTTP ERROR %d] %s\n", httpCode, http.errorToString(httpCode).c_str());
   }
+  http.end();
+}
+
+// ------------------------------------------------------------
+// Local ESP32 Web Dashboard Handler (http://<ESP32_IP>/)
+// ------------------------------------------------------------
+void handleRoot() {
+  String html = R"rawliteral(
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="refresh" content="3">
+    <title>SmartSchoolIoT - Station Dashboard</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #0b1120;
+        color: #e2e8f0;
+        text-align: center;
+        padding: 20px;
+        margin: 0;
+      }
+      h2 { color: #38bdf8; margin-bottom: 4px; }
+      p.sub { color: #94a3b8; font-size: 13px; margin-top: 0; }
+      .grid {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 15px;
+        max-width: 700px;
+        margin: 20px auto;
+      }
+      .card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        padding: 20px;
+        flex: 1 1 280px;
+        border-radius: 14px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+      }
+      .label { font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+      .value { font-size: 32px; color: #14b8a6; font-weight: bold; margin: 10px 0 4px; }
+      .footer { font-size: 11px; color: #64748b; margin-top: 25px; }
+      .status { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; background: #064e3b; color: #34d399; }
+    </style>
+  </head>
+  <body>
+    <h2>SmartSchoolIoT Node</h2>
+    <p class="sub">ZPHS Penamaluru - Drinking Water Quality & Kitchen Station</p>
+    <div class="grid">
+  )rawliteral";
+
+  // Turbidity Card
+  html += "<div class='card'><div class='label'>Drinking Water Purity</div><div class='value'>";
+  html += String(turbidityNtu, 2) + " NTU";
+  html += "</div><span class='status'>";
+  html += (turbidityNtu <= 5.0 ? "WHO SAFE DRINKING WATER" : "CONTAMINATION ALERT");
+  html += "</span><p style='color:#64748b;font-size:11px;margin-top:8px;'>Voltage: " + String(turbidityVoltage, 3) + " V | ADC: " + String(turbidityRaw) + "</p></div>";
+
+  // Temperature Card
+  html += "<div class='card'><div class='label'>Kitchen Temperature</div><div class='value' style='color:#f87171;'>";
+  if (isnan(temperature)) html += "Reading...";
+  else html += String(temperature, 1) + " &deg;C";
+  html += "</div><p style='color:#64748b;font-size:11px;'>DHT22 Environmental</p></div>";
+
+  // Humidity Card
+  html += "<div class='card'><div class='label'>Kitchen Humidity</div><div class='value' style='color:#fbbf24;'>";
+  if (isnan(humidity)) html += "Reading...";
+  else html += String(humidity, 1) + " %";
+  html += "</div><p style='color:#64748b;font-size:11px;'>Hygienic Storage Range</p></div>";
+
+  html += "</div><p class='footer'>SmartSchoolIoT Project Server: " + String(SERVER_HOST) + "<br>ESP32 Node IP: " + WiFi.localIP().toString() + "</p></body></html>";
+
+  server.send(200, "text/html", html);
 }
 
 // ------------------------------------------------------------
@@ -146,144 +221,58 @@ void setBuzzer(bool state, const char* reason) {
 void setup() {
   Serial.begin(115200);
   delay(1000);
+
+  // Initialize DHT22
+  dht.begin();
+
+  // Configure ADC for GPIO 34 (12-bit, 11dB attenuation)
+  analogReadResolution(12);
+  analogSetPinAttenuation(PIN_TURBIDITY, ADC_11db);
+
   Serial.println("\n=======================================================");
-  Serial.println("  SmartSchoolIoT - ESP32 Water & Meal Monitor Starting  ");
+  Serial.println("  SmartSchoolIoT - Starting Node Monitoring System     ");
+  Serial.println("  Sensors: DHT22 (GPIO 4) | Turbidity (GPIO 34, 2x Div)");
   Serial.println("=======================================================");
 
-  // Pin Modes
-  pinMode(PIN_TRIG, OUTPUT);
-  pinMode(PIN_ECHO, INPUT);
-  pinMode(PIN_TURBIDITY, INPUT);
-  pinMode(PIN_BUZZER, OUTPUT);
-  pinMode(PIN_STATUS_LED, OUTPUT);
-
-  digitalWrite(PIN_BUZZER, LOW);
-  digitalWrite(PIN_STATUS_LED, LOW);
-
-  // Initialize DHT
-  dht.begin();
-  Serial.println("[SETUP] DHT sensor initialized.");
-
   // Connect to WiFi
-  Serial.printf("[WIFI] Connecting to SSID: %s\n", WIFI_SSID);
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-  int wifiAttempts = 0;
-  while (WiFi.status() != WL_CONNECTED && wifiAttempts < 30) {
+  Serial.print("Connecting to WiFi (" + String(WIFI_SSID) + ")");
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
     delay(500);
     Serial.print(".");
-    digitalWrite(PIN_STATUS_LED, !digitalRead(PIN_STATUS_LED));
-    wifiAttempts++;
+    attempts++;
   }
 
+  Serial.println();
   if (WiFi.status() == WL_CONNECTED) {
-    digitalWrite(PIN_STATUS_LED, HIGH);
-    Serial.println("\n[WIFI] Connected successfully!");
-    Serial.printf("[WIFI] IP Address: %s\n", WiFi.localIP().toString().c_str());
+    Serial.println("WiFi connected successfully!");
+    Serial.print("Local Dashboard URL: http://");
+    Serial.println(WiFi.localIP());
+    Serial.printf("Pusing telemetry to: %s%s\n", SERVER_HOST, TELEMETRY_URL);
   } else {
-    digitalWrite(PIN_STATUS_LED, LOW);
-    Serial.println("\n[WIFI] Failed to connect to WiFi! Telemetry will queue until connection is established.");
+    Serial.println("WiFi connection failed or still connecting. Will retry in loop.");
   }
+
+  // Setup local web server
+  server.on("/", handleRoot);
+  server.begin();
+
+  // Initial read
+  readSensors();
 }
 
 // ------------------------------------------------------------
 // Main Loop
 // ------------------------------------------------------------
 void loop() {
-  unsigned long now = millis();
+  server.handleClient();
 
-  // Check if it is time to sample and send telemetry
-  if (now - lastSampleTime >= SAMPLING_INTERVAL_MS) {
-    lastSampleTime = now;
-
-    // 1. Read Ultrasonic Sensor
-    float distanceCm = readUltrasonicDistance();
-    if (distanceCm < 0) {
-      Serial.println("[SENSOR WARNING] Ultrasonic Echo timeout - check wiring.");
-      distanceCm = 0.0;
-    } else {
-      Serial.printf("[SENSOR] Ultrasonic Distance: %.1f cm\n", distanceCm);
-    }
-
-    // 2. Read Turbidity Sensor
-    float turbidityVoltage = 0.0;
-    float turbidityNtu = 0.0;
-    readTurbidity(turbidityVoltage, turbidityNtu);
-    Serial.printf("[SENSOR] Turbidity: %.2f NTU (Raw Voltage: %.2f V)\n", turbidityNtu, turbidityVoltage);
-
-    // 3. Read Kitchen Humidity
-    float humidity = 0.0;
-    float temperature = -1.0;
-    bool dhtOk = readKitchenHumidity(humidity, temperature);
-    if (dhtOk) {
-      Serial.printf("[SENSOR] Kitchen Humidity: %.1f %%\n", humidity);
-    } else {
-      Serial.println("[SENSOR WARNING] Failed to read DHT sensor - check wiring.");
-      humidity = 0.0;
-    }
-
-    // 4. Send Telemetry to Server if WiFi Connected
-    if (WiFi.status() == WL_CONNECTED) {
-      HTTPClient http;
-      String endpoint = String(SERVER_HOST) + String(TELEMETRY_URL);
-      http.begin(endpoint);
-      http.addHeader("Content-Type", "application/json");
-
-      // Construct JSON payload
-      // Strictly real sensor readings only
-      String jsonPayload = "{";
-      jsonPayload += "\"api_key\":\"" + String(HARDWARE_API_KEY) + "\",";
-      jsonPayload += "\"school_id\":" + String(SCHOOL_ID) + ",";
-      jsonPayload += "\"device_id\":\"" + String(DEVICE_ID) + "\",";
-      jsonPayload += "\"distance_cm\":" + String(distanceCm, 1) + ",";
-      jsonPayload += "\"turbidity_ntu\":" + String(turbidityNtu, 2) + ",";
-      jsonPayload += "\"turbidity_voltage\":" + String(turbidityVoltage, 2) + ",";
-      jsonPayload += "\"humidity_pct\":" + String(humidity, 1);
-      
-      // Only include temperature if real sensor physically read it
-      if (temperature > -1.0) {
-        jsonPayload += ",\"temperature_c\":" + String(temperature, 1);
-      }
-      jsonPayload += "}";
-
-      Serial.printf("[HTTP] POST -> %s\nPayload: %s\n", endpoint.c_str(), jsonPayload.c_str());
-
-      // Blink LED during network transmission
-      digitalWrite(PIN_STATUS_LED, LOW);
-      int httpCode = http.POST(jsonPayload);
-      digitalWrite(PIN_STATUS_LED, HIGH);
-
-      if (httpCode > 0) {
-        String response = http.getString();
-        Serial.printf("[HTTP] Response Code %d: %s\n", httpCode, response.c_str());
-
-        // Parse response for buzzer trigger
-        if (response.indexOf("\"buzzer\":true") > 0 || response.indexOf("\"buzzer\": true") > 0) {
-          char reasonBuf[64] = "Abnormal condition";
-          int reasonIdx = response.indexOf("\"buzzer_reason\":\"");
-          if (reasonIdx > 0) {
-            int startIdx = reasonIdx + 17;
-            int endIdx = response.indexOf("\"", startIdx);
-            if (endIdx > startIdx) {
-              response.substring(startIdx, endIdx).toCharArray(reasonBuf, sizeof(reasonBuf));
-            }
-          }
-          setBuzzer(true, reasonBuf);
-        } else {
-          setBuzzer(false, nullptr);
-        }
-      } else {
-        Serial.printf("[HTTP ERROR] Failed to send telemetry. Code: %d, Error: %s\n", httpCode, http.errorToString(httpCode).c_str());
-      }
-
-      http.end();
-    } else {
-      Serial.println("[WIFI] Reconnecting to WiFi network...");
-      WiFi.reconnect();
-    }
+  if (millis() - previousRead >= interval) {
+    previousRead = millis();
+    readSensors();
+    sendTelemetryToServer();
   }
-
-  // Small delay for RTOS task yield
-  delay(50);
 }

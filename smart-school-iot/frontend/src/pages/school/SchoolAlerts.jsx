@@ -51,7 +51,7 @@ export const SchoolAlerts = () => {
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-16 text-center text-xs text-slate-500 italic">
           <CheckCircle2 className="w-10 h-10 text-emerald-400/80 mx-auto mb-2" />
           <p className="text-sm font-semibold text-slate-300">No Alerts Active</p>
-          <p className="text-slate-500 mt-1">Water level, drinking water turbidity, and kitchen humidity are within configured normal limits.</p>
+          <p className="text-slate-500 mt-1">Drinking water turbidity and kitchen environmental parameters are within configured normal limits.</p>
         </div>
       ) : (
         <div className="space-y-3">

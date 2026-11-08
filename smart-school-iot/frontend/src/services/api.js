@@ -1,6 +1,10 @@
 import axios from 'axios';
 
-const rawApiUrl = import.meta.env.VITE_API_URL;
+const isLocalhost = typeof window !== 'undefined' && 
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const envApiUrl = import.meta.env.VITE_API_URL;
+const rawApiUrl = isLocalhost ? '' : (envApiUrl || 'https://smart-school-iot-backend.onrender.com');
 const baseURL = rawApiUrl
   ? `${rawApiUrl.replace(/\/+$/, '')}/api`
   : '/api';

@@ -34,7 +34,6 @@ export const AdminLayout = () => {
 
   const navItems = [
     { nameKey: 'dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
-    { nameKey: 'digitalTwin', path: '/admin/digital-twin', icon: Box },
     { nameKey: 'waterQuality', path: '/admin/water', icon: Droplets },
     { nameKey: 'mealKitchen', path: '/admin/meals', icon: UtensilsCrossed },
     { nameKey: 'multiSchool', path: '/admin/schools', icon: Building2 },

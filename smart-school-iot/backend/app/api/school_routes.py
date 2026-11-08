@@ -142,6 +142,9 @@ def get_school_water(current_user: User = Depends(require_school), db: Session =
 
 @router.get("/meals")
 def get_school_meals(current_user: User = Depends(require_school), db: Session = Depends(get_db)):
+    school = db.query(School).filter(School.id == current_user.school_id).first()
+    hw_info = get_live_hardware_status(school) if school else {"status": "DISCONNECTED", "label": "Hardware Not Connected"}
+
     meals = db.query(MealSubmission).filter(
         MealSubmission.school_id == current_user.school_id
     ).order_by(MealSubmission.created_at.desc()).all()
@@ -150,15 +153,18 @@ def get_school_meals(current_user: User = Depends(require_school), db: Session =
         ImageSubmission.school_id == current_user.school_id
     ).order_by(ImageSubmission.created_at.desc()).all()
     
-    # Also fetch humidity sensor reading if available
-    latest_sensor = db.query(SensorReading).filter(
-        SensorReading.school_id == current_user.school_id
-    ).order_by(SensorReading.recorded_at.desc()).first()
+    # Also fetch humidity sensor reading if available and hardware is online
+    latest_sensor = None
+    if hw_info["status"] == "CONNECTED":
+        latest_sensor = db.query(SensorReading).filter(
+            SensorReading.school_id == current_user.school_id
+        ).order_by(SensorReading.recorded_at.desc()).first()
     
     return {
         "meals": meals,
         "images": images,
-        "latest_sensor": latest_sensor
+        "latest_sensor": latest_sensor,
+        "hardware": hw_info
     }
 
 @router.post("/meals", response_model=MealResponse)

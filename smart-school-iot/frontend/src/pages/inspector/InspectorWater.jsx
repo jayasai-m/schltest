@@ -8,7 +8,8 @@ import {
   Building2,
   RefreshCw,
   Clock,
-  WifiOff
+  WifiOff,
+  UtensilsCrossed
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -72,8 +73,8 @@ export const InspectorWater = () => {
 
   const chartData = history.map((item) => ({
     time: new Date(item.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-    water_level: item.water_level_pct,
-    turbidity: item.turbidity_ntu
+    turbidity: item.turbidity_ntu,
+    humidity: item.humidity_pct
   }));
 
   const isConnected = school?.hardware_status === 'CONNECTED';
@@ -84,9 +85,9 @@ export const InspectorWater = () => {
       {/* Header & Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Water Quality & Tank Telemetry</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Drinking Water Quality Monitoring</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Real-time optical clarity monitoring (NTU) and ultrasonic tank levels for assigned schools
+            Real-time optical clarity monitoring (NTU) & kitchen telemetry for assigned institutions
           </p>
         </div>
 
@@ -125,20 +126,7 @@ export const InspectorWater = () => {
       ) : (
         <>
           {/* Real-Time Telemetry Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
-                <span>Tank Water Level</span>
-                <Droplets className="w-4 h-4 text-cyan-400" />
-              </div>
-              <p className="text-3xl font-black text-white mt-2">
-                {hasData ? `${latest.water_level_pct}%` : '--'}
-              </p>
-              <p className="text-xs text-slate-400 mt-1">
-                {hasData ? `${latest.water_volume_litres} Litres remaining` : 'Hardware offline'}
-              </p>
-            </div>
-
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
               <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
                 <span>Optical Turbidity</span>
@@ -156,13 +144,17 @@ export const InspectorWater = () => {
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
               <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
-                <span>Ultrasonic Distance</span>
-                <Clock className="w-4 h-4 text-purple-400" />
+                <span>Kitchen Humidity (DHT11)</span>
+                <UtensilsCrossed className="w-4 h-4 text-amber-400" />
               </div>
               <p className="text-3xl font-black text-white mt-2">
-                {hasData ? `${latest.distance_cm} cm` : '--'}
+                {hasData ? `${latest.humidity_pct}%` : '--'}
               </p>
-              <p className="text-xs text-slate-400 mt-1">Air gap to water surface</p>
+              <p className="text-xs text-slate-400 mt-1">
+                {hasData && latest.temperature_c !== null && latest.temperature_c !== undefined
+                  ? `Kitchen Temp: ${latest.temperature_c}°C`
+                  : 'Environmental sensor'}
+              </p>
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
@@ -200,8 +192,8 @@ export const InspectorWater = () => {
                     <Tooltip
                       contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
                     />
-                    <Line type="monotone" dataKey="water_level" name="Water Level (%)" stroke="#38bdf8" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="turbidity" name="Turbidity (NTU)" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="turbidity" name="Turbidity (NTU)" stroke="#38bdf8" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="humidity" name="Kitchen Humidity (%)" stroke="#f59e0b" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>

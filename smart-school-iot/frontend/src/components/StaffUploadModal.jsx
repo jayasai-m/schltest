@@ -300,6 +300,12 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
       await schoolService.uploadImage(formData);
       setSuccessMsg('Live captured photo submitted successfully with verified timestamp and location!');
 
+      // Notify window immediately so any dashboard/meal page refreshes
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('meal_uploaded'));
+      }
+      if (onUploadSuccess) onUploadSuccess();
+
       setTimeout(() => {
         setIsSubmitting(false);
         handleRetake();
@@ -309,7 +315,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
         setSuccessMsg('');
         if (onUploadSuccess) onUploadSuccess();
         onClose();
-      }, 1600);
+      }, 1400);
     } catch (err) {
       console.error(err);
       setErrorMsg(err.response?.data?.detail || 'Failed to submit captured photo. Please try again.');

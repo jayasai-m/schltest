@@ -73,10 +73,10 @@ export const WaterTankDigitalTwin = ({
         <div className="lg:col-span-7 flex flex-col items-center justify-center p-4">
           <div className="relative w-72 sm:w-80 h-96 flex items-center justify-center">
             
-            {/* Ultrasonic Sensor Transducer Housing mounted at top */}
+            {/* Sensor Transducer Housing mounted at top */}
             <div className="absolute top-0 z-20 flex flex-col items-center">
               <div className="bg-slate-700 border border-slate-600 px-3 py-1 rounded-t-md text-[10px] font-mono text-slate-300 shadow">
-                HC-SR04 / JSN-SR04T
+                {waterLevelPct !== null ? 'HC-SR04 Ultrasonic' : 'Water Quality Probe'}
               </div>
               <div className="w-16 h-4 bg-slate-800 border-x border-b border-slate-600 flex justify-around items-center px-1">
                 <div className="w-3 h-3 rounded-full bg-slate-950 border border-teal-400 flex items-center justify-center">
@@ -85,7 +85,7 @@ export const WaterTankDigitalTwin = ({
                 <div className="w-3 h-3 rounded-full bg-slate-950 border border-teal-400"></div>
               </div>
 
-              {/* Pulsing Ultrasonic Echo Waves (Only when hardware is actively transmitting) */}
+              {/* Pulsing Echo Waves (Only when hardware is actively transmitting) */}
               {hasData && (
                 <div className="flex flex-col items-center space-y-1 mt-1">
                   <div className="w-6 h-1 border-b-2 border-teal-400/80 rounded-full animate-pulse"></div>
@@ -116,10 +116,10 @@ export const WaterTankDigitalTwin = ({
               <div className="absolute bottom-6 -left-3 w-6 h-3 bg-slate-800 border border-slate-600 rounded-r-none"></div>
 
               {/* Water Fill Column */}
-              {hasData && waterLevelPct !== null ? (
+              {hasData ? (
                 <div
                   className="w-full relative transition-all duration-1000 ease-out"
-                  style={{ height: `${Math.max(2, Math.min(100, waterLevelPct))}%` }}
+                  style={{ height: waterLevelPct !== null ? `${Math.max(2, Math.min(100, waterLevelPct))}%` : '80%' }}
                 >
                   {/* Water Surface Wave Line */}
                   <div
@@ -155,62 +155,88 @@ export const WaterTankDigitalTwin = ({
 
         {/* Right Column: Telemetry Digital Telemetry Matrix */}
         <div className="lg:col-span-5 space-y-4">
-          {/* Main Level Metric Box */}
+          {/* Main Metric Box */}
           <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4">
-            <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-              <span className="flex items-center space-x-1.5">
-                <Gauge className="w-4 h-4 text-teal-400" />
-                <span>Water Storage Level</span>
-              </span>
-              <span className="font-mono text-slate-500">Cap: {tankCapacity} L</span>
-            </div>
-            <div className="flex items-baseline space-x-3">
-              <span className="text-4xl font-extrabold tracking-tight text-white font-mono">
-                {hasData && waterLevelPct !== null ? `${waterLevelPct}%` : '--'}
-              </span>
-              <span className="text-sm font-medium text-slate-400">
-                {hasData && waterLitres !== null ? `(${waterLitres} Litres)` : '(No Data)'}
-              </span>
-            </div>
+            {waterLevelPct !== null ? (
+              <>
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                  <span className="flex items-center space-x-1.5">
+                    <Gauge className="w-4 h-4 text-teal-400" />
+                    <span>Water Storage Level</span>
+                  </span>
+                  <span className="font-mono text-slate-500">Cap: {tankCapacity} L</span>
+                </div>
+                <div className="flex items-baseline space-x-3">
+                  <span className="text-4xl font-extrabold tracking-tight text-white font-mono">
+                    {hasData ? `${waterLevelPct}%` : '--'}
+                  </span>
+                  <span className="text-sm font-medium text-slate-400">
+                    {hasData && waterLitres !== null ? `(${waterLitres} Litres)` : '(No Data)'}
+                  </span>
+                </div>
 
-            {/* Status Condition Badge */}
-            <div className="mt-3">
-              {hasData ? (
-                <div className="flex items-center space-x-2">
-                  {ultrasonicStatus === 'NORMAL' && (
-                    <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center space-x-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Level Normal</span>
-                    </span>
-                  )}
-                  {ultrasonicStatus === 'LOW' && (
-                    <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center space-x-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      <span>Low Reserve Condition</span>
-                    </span>
-                  )}
-                  {ultrasonicStatus === 'OVERFLOW' && (
-                    <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center space-x-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      <span>Overflow Warning</span>
-                    </span>
+                <div className="mt-3">
+                  {hasData ? (
+                    <div className="flex items-center space-x-2">
+                      {ultrasonicStatus === 'NORMAL' && (
+                        <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center space-x-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Level Normal</span>
+                        </span>
+                      )}
+                      {ultrasonicStatus === 'LOW' && (
+                        <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center space-x-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          <span>Low Reserve Condition</span>
+                        </span>
+                      )}
+                      {ultrasonicStatus === 'OVERFLOW' && (
+                        <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center space-x-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          <span>Overflow Warning</span>
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-500 italic">No sensor telemetry available</span>
                   )}
                 </div>
-              ) : (
-                <span className="text-xs text-slate-500 italic">No sensor telemetry available</span>
-              )}
-            </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                  <span className="flex items-center space-x-1.5">
+                    <Droplets className="w-4 h-4 text-cyan-400" />
+                    <span>Drinking Water Quality</span>
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">Turbidity Active</span>
+                </div>
+                <div className="flex items-baseline space-x-3">
+                  <span className="text-4xl font-extrabold tracking-tight text-white font-mono">
+                    {hasData && turbidityNtu !== null ? `${turbidityNtu} NTU` : '--'}
+                  </span>
+                  <span className={`text-xs font-bold uppercase ${
+                    turbidityStatus === 'GOOD' ? 'text-emerald-400' : 'text-rose-400'
+                  }`}>
+                    {hasData ? `Purity: ${turbidityStatus}` : 'Sensor Offline'}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center space-x-2 text-xs text-slate-400">
+                  <span className="text-[11px] text-slate-500">Ultrasonic water level sensor disabled. Monitoring purity & kitchen hygiene.</span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Sensor Diagnostics Sub-Cards */}
           <div className="grid grid-cols-2 gap-3">
-            {/* Ultrasonic Distance */}
+            {/* Kitchen Humidity */}
             <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3">
-              <p className="text-[11px] font-medium text-slate-400">Air Gap / Distance</p>
+              <p className="text-[11px] font-medium text-slate-400">Kitchen Humidity</p>
               <p className="text-lg font-bold font-mono text-slate-200 mt-1">
-                {hasData && distanceCm !== null ? `${distanceCm} cm` : '--'}
+                {hasData && sensorData?.humidity_pct !== undefined ? `${sensorData.humidity_pct}%` : '--'}
               </p>
-              <p className="text-[10px] text-slate-500 mt-0.5">Sensor to water surface</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">DHT11 Environmental</p>
             </div>
 
             {/* Drinking Water Turbidity */}

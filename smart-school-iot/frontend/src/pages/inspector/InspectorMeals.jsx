@@ -12,7 +12,9 @@ import {
   Filter,
   Users,
   Brain,
-  X
+  X,
+  ArrowLeft,
+  ArrowRight
 } from 'lucide-react';
 
 export const InspectorMeals = () => {
@@ -21,6 +23,7 @@ export const InspectorMeals = () => {
 
   const [data, setData] = useState({ schools: [], images: [], meals: [] });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedSchoolId, setSelectedSchoolId] = useState(schoolParam || '');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
@@ -38,11 +41,14 @@ export const InspectorMeals = () => {
       console.error('Error fetching meals:', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
     fetchMeals();
+    const interval = setInterval(fetchMeals, 4000);
+    return () => clearInterval(interval);
   }, [selectedSchoolId, statusFilter]);
 
   const handleReview = async (imageId, newStatus) => {
@@ -115,10 +121,11 @@ export const InspectorMeals = () => {
         </div>
 
         <button
-          onClick={fetchMeals}
+          onClick={() => { setRefreshing(true); fetchMeals(); }}
+          disabled={refreshing}
           className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300 hover:text-white cursor-pointer"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
+          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-teal-400' : ''}`} />
           <span>Refresh</span>
         </button>
       </div>
@@ -157,76 +164,193 @@ export const InspectorMeals = () => {
         </div>
       </div>
 
-      {/* Gallery Grid */}
-      {data.images.length === 0 ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-16 text-center text-slate-500 text-xs">
-          No meal preparation or kitchen hygiene photographs found matching criteria.
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {data.images.map((img) => (
-            <div
-              key={img.id}
-              onClick={() => { setSelectedImage(img); setReviewNotes(img.admin_notes || ''); }}
-              className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg hover:border-slate-700 transition-all cursor-pointer group flex flex-col justify-between"
-            >
-              <div>
-                <div className="relative aspect-video bg-slate-950 overflow-hidden">
-                  <img
-                    src={getImageUrl(img.image_url)}
-                    alt={img.meal_type || 'Meal'}
-                    onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMAGE; }}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                  />
-                  <div className="absolute top-2 left-2 flex flex-col gap-1">
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-black/70 backdrop-blur-md text-white uppercase">
-                      {getCategoryLabel(img.category)}
-                    </span>
-                  </div>
-                  <div className="absolute top-2 right-2">
-                    {getStatusBadge(img.status)}
-                  </div>
-                </div>
+      {/* School-Wise Separation or Selected School Gallery */}
+      {!selectedSchoolId ? (
+        /* 1. Assigned Schools Directory Cards (When no school is selected) */
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2">
+            <div>
+              <h2 className="text-base font-bold text-white flex items-center space-x-2">
+                <Building2 className="w-5 h-5 text-teal-400" />
+                <span>Assigned Institutions – Meal Auditing</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Click on any assigned school below to view photos submitted by that institution.
+              </p>
+            </div>
+            <span className="text-xs text-slate-400 font-mono bg-slate-900 border border-slate-800 px-3 py-1 rounded-xl">
+              {data.schools.length} Schools in Jurisdiction
+            </span>
+          </div>
 
-                <div className="p-4 space-y-2">
-                  <h3 className="text-xs font-bold text-white truncate">{img.school_name}</h3>
-                  <p className="text-xs font-semibold text-teal-400 truncate">{img.meal_type || 'Mid-Day Meal'}</p>
-                  <p className="text-[11px] text-slate-400 line-clamp-2">{img.menu_description || 'Daily Meal'}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {data.schools.map((s) => {
+              const schoolImages = data.images.filter((img) => img.school_id === s.id);
+              const totalCount = schoolImages.length;
+              const pendingCount = schoolImages.filter((img) => img.status === 'PENDING_REVIEW' || img.status === 'CV_PASS' || img.status === 'CV_FLAG').length;
+              const verifiedCount = schoolImages.filter((img) => img.status === 'VERIFIED').length;
 
-                  {/* AI & CV results badge */}
-                  {img.cv_status && (
-                    <div className="mt-2 p-2 rounded-xl bg-slate-950 border border-slate-800 text-[10px] space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-teal-400 font-bold flex items-center space-x-1">
-                          <Brain className="w-3 h-3" />
-                          <span>AI / CV Vision</span>
-                        </span>
-                        <span className={`px-1.5 py-0.2 rounded font-mono text-[9px] ${
-                          img.cv_status === 'CV_PASS' ? 'text-emerald-400 bg-emerald-500/10' : 'text-amber-400 bg-amber-500/10'
-                        }`}>
-                          {img.cv_status}
-                        </span>
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => setSelectedSchoolId(s.id.toString())}
+                  className="bg-slate-900 border border-slate-800 hover:border-teal-500/40 rounded-2xl p-5 shadow-lg cursor-pointer transition-all hover:bg-slate-850 hover:shadow-xl flex flex-col justify-between group"
+                >
+                  <div>
+                    <div className="flex items-start justify-between">
+                      <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 group-hover:scale-105 transition-transform">
+                        <Building2 className="w-5 h-5" />
                       </div>
-                      <p className="text-slate-400 line-clamp-2">{img.cv_notes}</p>
-                      {img.cv_student_count !== null && img.cv_student_count !== undefined && (
-                        <p className="text-teal-300 font-mono text-[10px]">
-                          YOLOv8 Headcount: ~{img.cv_student_count} student(s)
-                        </p>
+                      {pendingCount > 0 ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                          {pendingCount} Pending Review
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          {totalCount > 0 ? 'All Audited' : 'No Submissions'}
+                        </span>
                       )}
                     </div>
-                  )}
-                </div>
-              </div>
 
-              <div className="p-4 pt-0 border-t border-slate-800/80 mt-2 flex items-center justify-between text-[11px] text-slate-500">
-                <span>{new Date(img.created_at).toLocaleDateString()}</span>
-                <span className="text-teal-400 font-semibold group-hover:underline flex items-center space-x-1">
-                  <Eye className="w-3 h-3" />
-                  <span>Inspect</span>
-                </span>
+                    <h3 className="text-base font-bold text-white mt-4 group-hover:text-teal-300 transition-colors">
+                      {s.name}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      School ID: <span className="font-mono text-slate-300">#{s.id}</span>
+                    </p>
+
+                    <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-800/80 text-center">
+                      <div className="bg-slate-950/60 rounded-lg p-2 border border-slate-800">
+                        <span className="text-[10px] text-slate-500 block">Total</span>
+                        <span className="text-sm font-bold font-mono text-slate-200">{totalCount}</span>
+                      </div>
+                      <div className="bg-slate-950/60 rounded-lg p-2 border border-slate-800">
+                        <span className="text-[10px] text-amber-400/80 block">Pending</span>
+                        <span className="text-sm font-bold font-mono text-amber-300">{pendingCount}</span>
+                      </div>
+                      <div className="bg-slate-950/60 rounded-lg p-2 border border-slate-800">
+                        <span className="text-[10px] text-emerald-400/80 block">Verified</span>
+                        <span className="text-sm font-bold font-mono text-emerald-300">{verifiedCount}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs font-semibold text-teal-400 group-hover:text-teal-300">
+                    <span>Audit Uploaded Photos</span>
+                    <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        /* 2. School-Specific Image Gallery (When a school is clicked) */
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-2xl gap-3 shadow-md">
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setSelectedSchoolId('')}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors border border-slate-700"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to Assigned Schools</span>
+              </button>
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center space-x-2">
+                  <span>{data.schools.find((s) => s.id.toString() === selectedSchoolId.toString())?.name || 'Selected Institution'}</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/20 font-mono">
+                    {data.images.length} Submissions
+                  </span>
+                </h2>
               </div>
             </div>
-          ))}
+
+            <span className="text-xs text-slate-400 flex items-center space-x-1">
+              <Brain className="w-3.5 h-3.5 text-violet-400" />
+              <span>AI / CV vision pipeline active</span>
+            </span>
+          </div>
+
+          {data.images.length === 0 ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-16 text-center text-xs text-slate-500 italic">
+              <UtensilsCrossed className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+              <p>No meal photo submissions uploaded by this school yet</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              {data.images.map((img) => (
+                <div
+                  key={img.id}
+                  onClick={() => { setSelectedImage(img); setReviewNotes(img.admin_notes || ''); }}
+                  className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg hover:border-slate-700 transition-all cursor-pointer group flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="relative aspect-video bg-slate-950 overflow-hidden">
+                      <img
+                        src={getImageUrl(img.image_url)}
+                        alt={img.meal_type || 'Meal'}
+                        onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMAGE; }}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                      />
+                      <div className="absolute top-2 left-2 flex flex-col gap-1">
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-black/70 backdrop-blur-md text-white uppercase">
+                          {getCategoryLabel(img.category)}
+                        </span>
+                      </div>
+                      <div className="absolute top-2 right-2">
+                        {getStatusBadge(img.status)}
+                      </div>
+
+                      {/* Student count badge for student eating */}
+                      {img.category === 'STUDENT_EATING' && (
+                        <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-violet-600/90 text-white border border-violet-400/40 shadow">
+                          👥 {img.cv_student_count != null ? `~${img.cv_student_count} students` : 'Counting students…'}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="p-4 space-y-2">
+                      <h3 className="text-xs font-bold text-white truncate">{img.school_name}</h3>
+                      <p className="text-xs font-semibold text-teal-400 truncate">{img.meal_type || 'Mid-Day Meal'}</p>
+                      <p className="text-[11px] text-slate-400 line-clamp-2">{img.menu_description || 'Daily Meal'}</p>
+
+                      {/* AI & CV results badge */}
+                      {img.cv_status && (
+                        <div className="mt-2 p-2 rounded-xl bg-slate-950 border border-slate-800 text-[10px] space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-teal-400 font-bold flex items-center space-x-1">
+                              <Brain className="w-3" />
+                              <span>AI / CV Vision</span>
+                            </span>
+                            <span className={`px-1.5 py-0.2 rounded font-mono text-[9px] ${
+                              img.cv_status === 'CV_PASS' ? 'text-emerald-400 bg-emerald-500/10' : 'text-amber-400 bg-amber-500/10'
+                            }`}>
+                              {img.cv_status}
+                            </span>
+                          </div>
+                          <p className="text-slate-400 line-clamp-2">{img.cv_notes}</p>
+                          {img.cv_student_count !== null && img.cv_student_count !== undefined && (
+                            <p className="text-teal-300 font-mono text-[10px]">
+                              YOLOv8 Headcount: ~{img.cv_student_count} student(s)
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-4 pt-0 border-t border-slate-800/80 mt-2 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>{new Date(img.created_at).toLocaleDateString()}</span>
+                    <span className="text-teal-400 font-semibold group-hover:underline flex items-center space-x-1">
+                      <Eye className="w-3 h-3" />
+                      <span>Inspect</span>
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

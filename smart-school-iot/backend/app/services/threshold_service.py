@@ -9,9 +9,9 @@ from .firebase_service import sync_telemetry_to_firebase
 def process_sensor_telemetry(
     db: Session,
     school: School,
-    distance_cm: float,
-    turbidity_ntu: float,
-    humidity_pct: float,
+    distance_cm: float = None,
+    turbidity_ntu: float = 0.0,
+    humidity_pct: float = 0.0,
     turbidity_voltage: float = None,
     temperature_c: float = None,
     raw_payload: str = None
@@ -20,26 +20,31 @@ def process_sensor_telemetry(
     Computes real physical values, evaluates safety thresholds, creates real alerts if abnormal,
     and determines whether physical buzzer on the ESP32 should sound.
     Strictly follows: 'Do not generate alerts randomly. Do not create alerts without actual sensor data.'
+    Supports operation with or without ultrasonic sensor (water level is optional).
     """
-    tank_height = school.tank_height_cm if school.tank_height_cm > 0 else 200.0
-    offset = school.sensor_offset_cm if school.sensor_offset_cm is not None else 10.0
-    capacity = school.tank_capacity_litres if school.tank_capacity_litres > 0 else 2000.0
-    
-    # Calculate water level from ultrasonic distance
-    # Distance is measured from sensor at the top down to the water surface
-    # Water column height = tank_height + offset - distance
-    calculated_height = (tank_height + offset) - distance_cm
-    water_height_cm = max(0.0, min(tank_height, calculated_height))
-    
-    water_level_pct = round((water_height_cm / tank_height) * 100.0, 1)
-    water_volume_litres = round((water_level_pct / 100.0) * capacity, 1)
-    
-    # Ultrasonic condition
-    ultrasonic_status = "NORMAL"
-    if water_level_pct >= school.overflow_threshold_pct:
-        ultrasonic_status = "OVERFLOW"
-    elif water_level_pct <= school.low_water_threshold_pct:
-        ultrasonic_status = "LOW"
+    if distance_cm is not None:
+        tank_height = school.tank_height_cm if school.tank_height_cm > 0 else 200.0
+        offset = school.sensor_offset_cm if school.sensor_offset_cm is not None else 10.0
+        capacity = school.tank_capacity_litres if school.tank_capacity_litres > 0 else 2000.0
+        
+        # Calculate water level from ultrasonic distance
+        calculated_height = (tank_height + offset) - distance_cm
+        water_height_cm = max(0.0, min(tank_height, calculated_height))
+        
+        water_level_pct = round((water_height_cm / tank_height) * 100.0, 1)
+        water_volume_litres = round((water_level_pct / 100.0) * capacity, 1)
+        
+        # Ultrasonic condition
+        ultrasonic_status = "NORMAL"
+        if water_level_pct >= school.overflow_threshold_pct:
+            ultrasonic_status = "OVERFLOW"
+        elif water_level_pct <= school.low_water_threshold_pct:
+            ultrasonic_status = "LOW"
+    else:
+        # Ultrasonic sensor removed or disabled
+        water_level_pct = None
+        water_volume_litres = None
+        ultrasonic_status = "N/A"
         
     # Turbidity condition
     turbidity_status = "GOOD"
@@ -56,7 +61,7 @@ def process_sensor_telemetry(
     # Save reading to database
     reading = SensorReading(
         school_id=school.id,
-        distance_cm=round(distance_cm, 1),
+        distance_cm=round(distance_cm, 1) if distance_cm is not None else None,
         water_level_pct=water_level_pct,
         water_volume_litres=water_volume_litres,
         ultrasonic_status=ultrasonic_status,

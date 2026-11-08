@@ -8,14 +8,13 @@ import json
 URL = "http://localhost:8000/api/hardware/telemetry"
 
 payload = {
-    "api_key": "esp32_poranki_hw_key_2026",
+    "api_key": "esp32_penamaluru_hw_key_2026",
     "school_id": 1,
-    "device_id": "ESP32-PORANKI-01",
-    "distance_cm": 50.0,
+    "device_id": "ESP32-PENAMALURU-01",
     "turbidity_ntu": 1.4,
     "turbidity_voltage": 2.85,
     "humidity_pct": 55.0,
-    "temperature_c": None  # strictly null unless physical temperature sensor present
+    "temperature_c": 28.5
 }
 
 print(f"Sending telemetry payload to: {URL}")

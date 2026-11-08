@@ -33,7 +33,6 @@ export const SchoolLayout = () => {
 
   const navItems = [
     { nameKey: 'dashboard', path: '/school/dashboard', icon: LayoutDashboard },
-    { nameKey: 'digitalTwin', path: '/school/digital-twin', icon: Box },
     { nameKey: 'waterQuality', path: '/school/water', icon: Droplets },
     { nameKey: 'mealKitchen', path: '/school/meals', icon: UtensilsCrossed },
     { nameKey: 'alerts', path: '/school/alerts', icon: AlertTriangle },

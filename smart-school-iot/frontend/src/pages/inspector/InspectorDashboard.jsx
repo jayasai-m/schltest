@@ -85,7 +85,7 @@ export const InspectorDashboard = () => {
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Field Inspector Dashboard</h1>
           <p className="text-xs text-slate-400 mt-1">
-            Supervise assigned government institutions, monitor overhead tank telemetry, and audit daily mid-day meals
+            Supervise assigned government institutions, monitor water quality & kitchen telemetry, and audit daily mid-day meals
           </p>
         </div>
 
@@ -210,19 +210,19 @@ export const InspectorDashboard = () => {
                 {/* Telemetry info */}
                 <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-2 text-xs">
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Water Tank Fill:</span>
-                    <span className="font-bold text-white">
-                      {s.latest_reading?.water_level_pct !== null && s.latest_reading?.water_level_pct !== undefined
-                        ? `${s.latest_reading.water_level_pct}% (${s.latest_reading.water_volume_litres} L)`
+                    <span className="text-slate-400">Turbidity:</span>
+                    <span className="font-semibold text-white">
+                      {s.latest_reading?.turbidity_ntu !== null && s.latest_reading?.turbidity_ntu !== undefined
+                        ? `${s.latest_reading.turbidity_ntu} NTU`
                         : '--'}
                     </span>
                   </div>
 
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Turbidity:</span>
+                    <span className="text-slate-400">Kitchen Humidity:</span>
                     <span className="font-semibold text-white">
-                      {s.latest_reading?.turbidity_ntu !== null && s.latest_reading?.turbidity_ntu !== undefined
-                        ? `${s.latest_reading.turbidity_ntu} NTU`
+                      {s.latest_reading?.humidity_pct !== null && s.latest_reading?.humidity_pct !== undefined
+                        ? `${s.latest_reading.humidity_pct}%`
                         : '--'}
                     </span>
                   </div>
@@ -248,10 +248,10 @@ export const InspectorDashboard = () => {
                 <div className="flex items-center justify-between pt-1">
                   <span className="text-[11px] text-slate-500">Principal: {s.principal_name}</span>
                   <Link
-                    to={`/inspector/digital-twin?school_id=${s.id}`}
+                    to={`/inspector/water?school_id=${s.id}`}
                     className="text-xs text-teal-400 hover:text-teal-300 font-semibold flex items-center space-x-1"
                   >
-                    <span>View Twin</span>
+                    <span>View Water Quality</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
