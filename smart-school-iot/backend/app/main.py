@@ -195,6 +195,7 @@ def seed_initial_data():
         db.close()
 
 @app.get("/")
+@app.get("/api")
 def root():
     return {
         "system": "SmartSchoolIoT",
@@ -204,5 +205,6 @@ def root():
     }
 
 @app.get("/health")
+@app.get("/api/health")
 def health_check():
     return {"status": "healthy"}
