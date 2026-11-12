@@ -1,0 +1,12 @@
+**/node_modules
+**/venv
+**/env
+**/.venv
+**/*.pt
+**/uploads
+**/.git
+**/*.log
+smart-school-iot/backend/venv
+smart-school-iot/frontend/node_modules
+smart-school-iot/backend/uploads
+smart-school-iot/hardware
