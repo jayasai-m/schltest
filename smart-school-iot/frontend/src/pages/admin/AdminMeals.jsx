@@ -61,34 +61,34 @@ export const AdminMeals = () => {
   };
 
   const getCategoryLabel = (cat) => {
-    if (cat === 'MEAL_PREPARATION') return '🥘 Meal Prep';
-    if (cat === 'KITCHEN_HYGIENE')  return '🧼 Kitchen Hygiene';
-    if (cat === 'STUDENT_EATING')   return '👥 Students Eating';
+    if (cat === 'MEAL_PREPARATION') return 'Meal Prep';
+    if (cat === 'KITCHEN_HYGIENE')  return 'Kitchen Hygiene';
+    if (cat === 'STUDENT_EATING')   return 'Students Eating';
     return cat;
   };
 
   const statusPill = (status) => {
     const map = {
-      VERIFIED:       'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-      CV_PASS:        'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-      FLAGGED:        'bg-amber-500/20 text-amber-300 border-amber-500/40',
-      CV_FLAG:        'bg-rose-500/20 text-rose-300 border-rose-500/40',
-      REJECTED:       'bg-rose-500/20 text-rose-300 border-rose-500/40',
-      PENDING_REVIEW: 'bg-slate-800/90 text-slate-300 border-slate-700',
+      VERIFIED:       'bg-emerald-50 text-emerald-800 border-emerald-200',
+      CV_PASS:        'bg-emerald-50 text-emerald-700 border-emerald-200',
+      FLAGGED:        'bg-amber-50 text-amber-800 border-amber-200',
+      CV_FLAG:        'bg-rose-50 text-rose-700 border-rose-200',
+      REJECTED:       'bg-rose-50 text-rose-800 border-rose-200',
+      PENDING_REVIEW: 'bg-slate-100 text-slate-700 border-slate-200',
     };
-    return map[status] || 'bg-slate-800/90 text-slate-300 border-slate-700';
+    return map[status] || 'bg-slate-100 text-slate-700 border-slate-200';
   };
 
   const cardBorder = (img) => {
-    if (img.status === 'CV_FLAG' || img.status === 'FLAGGED') return 'border-rose-500/40';
-    if (img.status === 'CV_PASS' || img.status === 'VERIFIED') return 'border-emerald-500/30';
-    return 'border-slate-800 hover:border-slate-700';
+    if (img.status === 'CV_FLAG' || img.status === 'FLAGGED') return 'border-rose-300';
+    if (img.status === 'CV_PASS' || img.status === 'VERIFIED') return 'border-emerald-300';
+    return 'border-slate-200 hover:border-slate-300';
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-teal-500" />
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-teal-600 border-t-transparent" />
       </div>
     );
   }
@@ -96,65 +96,58 @@ export const AdminMeals = () => {
   const { schools, images } = data;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Mid-Day Meal &amp; Kitchen Hygiene</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            CV-assisted photo verification • Food quality check • Student count • Manual admin review
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Mid-Day Meal & Kitchen Hygiene</h1>
+          <p className="text-xs text-slate-500 mt-1">
+            Photo verification • Food quality check • Student attendance count • Administrator review
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => { setRefreshing(true); fetchMeals(); }}
             disabled={refreshing}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl"
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-xs"
             title="Refresh submissions"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-teal-400' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-teal-600' : 'text-slate-500'}`} />
             <span>Refresh</span>
           </button>
 
           {/* School filter */}
-          <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5">
-            <Building2 className="w-4 h-4 text-teal-400" />
+          <div className="flex items-center space-x-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-xs">
+            <Building2 className="w-4 h-4 text-teal-600" />
             <select
               value={selectedSchoolId}
               onChange={(e) => setSelectedSchoolId(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer"
             >
-              <option value="" className="bg-slate-900">All Schools</option>
+              <option value="">All Schools</option>
               {schools.map((s) => (
-                <option key={s.id} value={s.id} className="bg-slate-900">{s.name}</option>
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
           </div>
 
           {/* Status filter */}
-          <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5">
-            <Filter className="w-4 h-4 text-teal-400" />
+          <div className="flex items-center space-x-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-xs">
+            <Filter className="w-4 h-4 text-teal-600" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer"
             >
-              <option value=""              className="bg-slate-900">All Statuses</option>
-              <option value="PENDING_REVIEW" className="bg-slate-900">Pending Review</option>
-              <option value="CV_PASS"        className="bg-slate-900">🤖 CV: Passed</option>
-              <option value="CV_FLAG"        className="bg-slate-900">🤖 CV: Flagged</option>
-              <option value="VERIFIED"       className="bg-slate-900">Admin Verified</option>
-              <option value="FLAGGED"        className="bg-slate-900">Admin Flagged</option>
-              <option value="REJECTED"       className="bg-slate-900">Rejected</option>
+              <option value="">All Statuses</option>
+              <option value="PENDING_REVIEW">Pending Review</option>
+              <option value="CV_PASS">CV: Passed</option>
+              <option value="CV_FLAG">CV: Flagged</option>
+              <option value="VERIFIED">Admin Verified</option>
+              <option value="FLAGGED">Admin Flagged</option>
+              <option value="REJECTED">Rejected</option>
             </select>
           </div>
-
-          <button
-            onClick={fetchMeals}
-            className="p-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
@@ -164,15 +157,15 @@ export const AdminMeals = () => {
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2">
             <div>
-              <h2 className="text-base font-bold text-white flex items-center space-x-2">
-                <Building2 className="w-5 h-5 text-teal-400" />
-                <span>Institutions &amp; Meal Monitoring Directory</span>
+              <h2 className="text-base font-bold text-slate-900 flex items-center space-x-2">
+                <Building2 className="w-5 h-5 text-teal-600" />
+                <span>Institutions & Meal Monitoring Directory</span>
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 Click on any school below to view photos uploaded by that institution.
               </p>
             </div>
-            <span className="text-xs text-slate-400 font-mono bg-slate-900 border border-slate-800 px-3 py-1 rounded-xl">
+            <span className="text-xs text-slate-600 font-mono bg-white border border-slate-200 px-3 py-1 rounded-lg">
               {schools.length} Active Institutions
             </span>
           </div>
@@ -188,48 +181,48 @@ export const AdminMeals = () => {
                 <div
                   key={s.id}
                   onClick={() => setSelectedSchoolId(s.id.toString())}
-                  className="bg-slate-900 border border-slate-800 hover:border-teal-500/40 rounded-2xl p-5 shadow-lg cursor-pointer transition-all hover:bg-slate-850 hover:shadow-xl flex flex-col justify-between group"
+                  className="bg-white border border-slate-200 hover:border-teal-500 rounded-xl p-5 shadow-xs cursor-pointer transition-all hover:shadow-sm flex flex-col justify-between group"
                 >
                   <div>
                     <div className="flex items-start justify-between">
-                      <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 group-hover:scale-105 transition-transform">
+                      <div className="w-9 h-9 rounded-lg bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-700">
                         <Building2 className="w-5 h-5" />
                       </div>
                       {pendingCount > 0 ? (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
                           {pendingCount} Pending Review
                         </span>
                       ) : (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
                           {totalCount > 0 ? 'All Reviewed' : 'No Submissions'}
                         </span>
                       )}
                     </div>
 
-                    <h3 className="text-base font-bold text-white mt-4 group-hover:text-teal-300 transition-colors">
+                    <h3 className="text-base font-bold text-slate-900 mt-4 group-hover:text-teal-700 transition-colors">
                       {s.name}
                     </h3>
-                    <p className="text-xs text-slate-400 mt-1">
-                      School ID: <span className="font-mono text-slate-300">#{s.id}</span>
+                    <p className="text-xs text-slate-500 mt-1">
+                      School ID: <span className="font-mono text-slate-700">#{s.id}</span>
                     </p>
 
-                    <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-800/80 text-center">
-                      <div className="bg-slate-950/60 rounded-lg p-2 border border-slate-800">
+                    <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100 text-center">
+                      <div className="bg-slate-50 rounded-lg p-2 border border-slate-200">
                         <span className="text-[10px] text-slate-500 block">Total</span>
-                        <span className="text-sm font-bold font-mono text-slate-200">{totalCount}</span>
+                        <span className="text-sm font-bold font-mono text-slate-800">{totalCount}</span>
                       </div>
-                      <div className="bg-slate-950/60 rounded-lg p-2 border border-slate-800">
-                        <span className="text-[10px] text-amber-400/80 block">Pending</span>
-                        <span className="text-sm font-bold font-mono text-amber-300">{pendingCount}</span>
+                      <div className="bg-slate-50 rounded-lg p-2 border border-slate-200">
+                        <span className="text-[10px] text-amber-700 block">Pending</span>
+                        <span className="text-sm font-bold font-mono text-amber-700">{pendingCount}</span>
                       </div>
-                      <div className="bg-slate-950/60 rounded-lg p-2 border border-slate-800">
-                        <span className="text-[10px] text-emerald-400/80 block">Verified</span>
-                        <span className="text-sm font-bold font-mono text-emerald-300">{verifiedCount}</span>
+                      <div className="bg-slate-50 rounded-lg p-2 border border-slate-200">
+                        <span className="text-[10px] text-emerald-700 block">Verified</span>
+                        <span className="text-sm font-bold font-mono text-emerald-700">{verifiedCount}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs font-semibold text-teal-400 group-hover:text-teal-300">
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-teal-700 group-hover:text-teal-800">
                     <span>View Uploaded Photos</span>
                     <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
                   </div>
@@ -241,34 +234,34 @@ export const AdminMeals = () => {
       ) : (
         /* 2. School-Specific Image Gallery (When a school is clicked) */
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-2xl gap-3 shadow-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white border border-slate-200 rounded-xl gap-3 shadow-xs">
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => setSelectedSchoolId('')}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition-colors border border-slate-700"
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors border border-slate-300"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back to All Schools</span>
               </button>
               <div>
-                <h2 className="text-base font-bold text-white flex items-center space-x-2">
+                <h2 className="text-base font-bold text-slate-900 flex items-center space-x-2">
                   <span>{schools.find((s) => s.id.toString() === selectedSchoolId.toString())?.name || 'Selected Institution'}</span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/20 font-mono">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200 font-mono">
                     {images.length} Submissions
                   </span>
                 </h2>
               </div>
             </div>
 
-            <span className="text-xs text-slate-400 flex items-center space-x-1">
-              <Brain className="w-3.5 h-3.5 text-violet-400" />
-              <span>CV auto-analysis active for Meal Prep &amp; Student Eating</span>
+            <span className="text-xs text-slate-500 flex items-center space-x-1">
+              <Brain className="w-3.5 h-3.5 text-teal-600" />
+              <span>Automated analysis active for Meal Prep & Student Eating</span>
             </span>
           </div>
 
           {images.length === 0 ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-16 text-center text-xs text-slate-500 italic">
-              <UtensilsCrossed className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+            <div className="bg-white border border-slate-200 rounded-xl p-16 text-center text-xs text-slate-500 italic">
+              <UtensilsCrossed className="w-8 h-8 text-slate-400 mx-auto mb-2" />
               <p>No meal photo submissions uploaded by this school yet</p>
             </div>
           ) : (
@@ -276,43 +269,49 @@ export const AdminMeals = () => {
               {images.map((img) => (
                 <div
                   key={img.id}
-                  className={`bg-slate-900 border rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between transition-colors ${cardBorder(img)}`}
+                  className={`bg-white border rounded-xl overflow-hidden shadow-xs flex flex-col justify-between transition-colors ${cardBorder(img)}`}
                 >
                   <div>
                     {/* Thumbnail */}
-                    <div className="relative h-48 bg-slate-950 overflow-hidden group">
+                    <div className="relative h-48 bg-slate-100 overflow-hidden group">
                       <img
                         src={getImageUrl(img.image_url)}
                         alt="Submission"
                         onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMAGE; }}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <button
                           onClick={() => { setSelectedImage(img); setReviewNotes(img.admin_notes || ''); }}
-                          className="px-3 py-1.5 rounded-lg bg-teal-500 text-slate-950 font-bold text-xs flex items-center space-x-1"
+                          className="px-3 py-1.5 rounded-lg bg-teal-600 text-white font-semibold text-xs flex items-center space-x-1 shadow-xs"
                         >
                           <Eye className="w-4 h-4" /><span>Inspect Full Photo</span>
                         </button>
                       </div>
 
                       {/* Category badge */}
-                      <span className="absolute top-3 left-3 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-900/90 backdrop-blur-sm text-teal-300 border border-teal-500/30">
+                      <span className="absolute top-3 left-3 px-2 py-0.5 rounded-md text-[10px] font-bold bg-white/95 text-slate-800 border border-slate-200 shadow-xs">
                         {getCategoryLabel(img.category)}
                       </span>
 
                       {/* Status pill */}
-                      <span className={`absolute top-3 right-3 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusPill(img.status)}`}>
-                        {img.status}
-                      </span>
+                      {(() => {
+                        const isZeroStudents = img.category === 'STUDENT_EATING' && (img.cv_student_count === 0 || img.cv_student_count === '0');
+                        const effectiveStatus = (isZeroStudents && img.status === 'CV_PASS') ? 'CV_FLAG' : img.status;
+                        return (
+                          <span className={`absolute top-3 right-3 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusPill(effectiveStatus)}`}>
+                            {effectiveStatus}
+                          </span>
+                        );
+                      })()}
 
                       {/* Student count badge */}
                       {img.category === 'STUDENT_EATING' && (
-                        <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-violet-600/90 text-white border border-violet-400/40 flex items-center space-x-1 shadow-md">
-                          <Users className="w-3.5 h-3.5" />
+                        <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-900/90 text-white flex items-center space-x-1 shadow-xs">
+                          <Users className="w-3.5 h-3.5 text-teal-400" />
                           <span>
                             {img.cv_student_count != null
-                              ? `~${img.cv_student_count} students`
+                              ? `${img.cv_student_count} students`
                               : (img.status === 'PENDING_REVIEW' ? 'Counting students…' : '0 students')}
                           </span>
                         </span>
@@ -322,32 +321,34 @@ export const AdminMeals = () => {
                     {/* Metadata */}
                     <div className="p-4 space-y-2 text-xs">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-white text-sm truncate">{img.school_name || 'School'}</span>
-                        <span className="text-[10px] text-slate-500 font-mono">
+                        <span className="font-bold text-slate-900 text-sm truncate">{img.school_name || 'School'}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">
                           {new Date(img.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
 
-                      {img.meal_type && <p className="text-teal-400 font-medium">Menu: {img.meal_type}</p>}
+                      {img.meal_type && <p className="text-teal-800 font-medium">Menu: {img.meal_type}</p>}
 
-                      <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400 pt-1">
-                        <div>Staff: <span className="text-slate-200 font-medium">{img.staff_name || '--'}</span></div>
-                        <div>Shift: <span className="text-slate-200 font-medium">{img.inspection_shift || '--'}</span></div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-500 pt-1">
+                        <div>Staff: <span className="text-slate-800 font-medium">{img.staff_name || '--'}</span></div>
+                        <div>Shift: <span className="text-slate-800 font-medium">{img.inspection_shift || '--'}</span></div>
                       </div>
 
                       {/* CV inline note */}
                       {img.cv_notes && (
                         <div className={`mt-1.5 px-2.5 py-2 rounded-lg border text-[11px] ${
-                          img.cv_status === 'CV_PASS' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' :
-                          img.cv_status === 'CV_FLAG' ? 'bg-rose-500/10 border-rose-500/20 text-rose-300' :
-                          'bg-slate-800 border-slate-700 text-slate-400'
+                          (img.cv_status === 'CV_PASS' && !(img.category === 'STUDENT_EATING' && (img.cv_student_count === 0 || img.cv_student_count === '0')))
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                            : (img.cv_status === 'CV_FLAG' || (img.category === 'STUDENT_EATING' && (img.cv_student_count === 0 || img.cv_student_count === '0')))
+                            ? 'bg-rose-50 border-rose-200 text-rose-800'
+                            : 'bg-slate-50 border-slate-200 text-slate-600'
                         }`}>
-                          <span className="font-semibold">🤖 CV: </span>{img.cv_notes}
+                          <span className="font-semibold">Analysis: </span>{img.cv_notes}
                         </div>
                       )}
 
                       {img.admin_notes && (
-                        <p className="text-[11px] text-teal-300 bg-teal-500/10 p-2 rounded-lg border border-teal-500/20">
+                        <p className="text-[11px] text-teal-900 bg-teal-50 p-2 rounded-lg border border-teal-200">
                           Admin Note: {img.admin_notes}
                         </p>
                       )}
@@ -355,22 +356,22 @@ export const AdminMeals = () => {
                   </div>
 
                   {/* Action bar */}
-                  <div className="p-3 border-t border-slate-800 bg-slate-950/40 flex items-center justify-end space-x-2">
+                  <div className="p-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-end space-x-2">
                     <button
                       onClick={() => { setSelectedImage(img); setReviewNotes(img.admin_notes || ''); }}
-                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                      className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold shadow-xs"
                     >
                       Review
                     </button>
                     <button
                       onClick={() => handleReview(img.id, 'VERIFIED')}
-                      className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-xs font-semibold flex items-center space-x-1"
+                      className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold flex items-center space-x-1"
                     >
                       <Check className="w-3.5 h-3.5" /><span>Verify</span>
                     </button>
                     <button
                       onClick={() => handleReview(img.id, 'FLAGGED')}
-                      className="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 text-xs font-semibold flex items-center space-x-1"
+                      className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold flex items-center space-x-1"
                     >
                       <AlertTriangle className="w-3.5 h-3.5" /><span>Flag</span>
                     </button>
@@ -384,22 +385,22 @@ export const AdminMeals = () => {
 
       {/* Inspection Modal */}
       {selectedImage && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl my-6">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-xl max-w-2xl w-full overflow-hidden shadow-xl my-6">
             {/* Modal header */}
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div>
-                <h3 className="font-bold text-white text-sm">Image Inspection #{selectedImage.id}</h3>
-                <p className="text-xs text-slate-400">{selectedImage.school_name} • {getCategoryLabel(selectedImage.category)}</p>
+                <h3 className="font-bold text-slate-900 text-sm">Image Inspection #{selectedImage.id}</h3>
+                <p className="text-xs text-slate-500">{selectedImage.school_name} • {getCategoryLabel(selectedImage.category)}</p>
               </div>
-              <button onClick={() => setSelectedImage(null)} className="text-slate-400 hover:text-white p-1">
+              <button onClick={() => setSelectedImage(null)} className="text-slate-400 hover:text-slate-700 p-1">
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
 
             <div className="p-5 space-y-4">
               {/* Full image */}
-              <div className="max-h-80 overflow-hidden rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center">
+              <div className="max-h-80 overflow-hidden rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center">
                 <img
                   src={getImageUrl(selectedImage.image_url)}
                   alt="Full Resolution"
@@ -408,17 +409,17 @@ export const AdminMeals = () => {
                 />
               </div>
 
-              {/* ── CV Analysis Panel ── */}
+              {/* CV Analysis Panel */}
               {selectedImage.cv_status ? (
                 <div className={`rounded-xl border p-4 space-y-3 ${
-                  selectedImage.cv_status === 'CV_PASS' ? 'bg-emerald-500/10 border-emerald-500/30' :
-                  selectedImage.cv_status === 'CV_FLAG' ? 'bg-rose-500/10 border-rose-500/30' :
-                  'bg-slate-800/50 border-slate-700'
+                  selectedImage.cv_status === 'CV_PASS' ? 'bg-emerald-50 border-emerald-200' :
+                  selectedImage.cv_status === 'CV_FLAG' ? 'bg-rose-50 border-rose-200' :
+                  'bg-slate-50 border-slate-200'
                 }`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white flex items-center space-x-1.5">
-                      <Brain className="w-4 h-4 text-violet-400" />
-                      <span>Computer Vision Analysis Result</span>
+                    <span className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
+                      <Brain className="w-4 h-4 text-teal-700" />
+                      <span>Automated Analysis Result</span>
                     </span>
                     <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${statusPill(selectedImage.cv_status)}`}>
                       {selectedImage.cv_status}
@@ -426,26 +427,26 @@ export const AdminMeals = () => {
                   </div>
 
                   {selectedImage.cv_notes && (
-                    <p className="text-xs text-slate-200 leading-relaxed">{selectedImage.cv_notes}</p>
+                    <p className="text-xs text-slate-700 leading-relaxed">{selectedImage.cv_notes}</p>
                   )}
 
                   <div className="flex flex-wrap gap-3 text-[11px]">
                     {selectedImage.cv_confidence != null && (
-                      <div className="bg-slate-900/60 rounded-lg px-3 py-2 text-center min-w-[80px]">
+                      <div className="bg-white rounded-lg px-3 py-2 text-center border border-slate-200 min-w-[80px]">
                         <p className="text-slate-500">Confidence</p>
-                        <p className="font-bold text-white">{Math.round(selectedImage.cv_confidence * 100)}%</p>
+                        <p className="font-bold text-slate-900">{Math.round(selectedImage.cv_confidence * 100)}%</p>
                       </div>
                     )}
                     {selectedImage.cv_student_count != null && (
-                      <div className="bg-violet-500/15 rounded-lg px-3 py-2 text-center border border-violet-500/30 min-w-[80px]">
-                        <p className="text-violet-400">Students Detected</p>
-                        <p className="font-bold text-white text-lg">~{selectedImage.cv_student_count}</p>
+                      <div className="bg-white rounded-lg px-3 py-2 text-center border border-slate-200 min-w-[80px]">
+                        <p className="text-teal-700 font-medium">Students Detected</p>
+                        <p className="font-bold text-slate-900 text-lg">{selectedImage.cv_student_count}</p>
                       </div>
                     )}
                     {selectedImage.cv_processed_at && (
-                      <div className="bg-slate-900/60 rounded-lg px-3 py-2 text-center min-w-[80px]">
-                        <p className="text-slate-500">CV Time</p>
-                        <p className="font-bold text-slate-300">
+                      <div className="bg-white rounded-lg px-3 py-2 text-center border border-slate-200 min-w-[80px]">
+                        <p className="text-slate-500">Processed At</p>
+                        <p className="font-bold text-slate-700">
                           {new Date(selectedImage.cv_processed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
@@ -453,45 +454,45 @@ export const AdminMeals = () => {
                   </div>
                 </div>
               ) : selectedImage.category !== 'KITCHEN_HYGIENE' && (
-                <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-3 text-xs text-slate-400 flex items-center space-x-2">
-                  <Brain className="w-4 h-4 text-slate-500" />
-                  <span>CV analysis is still processing — refresh in a few seconds, or add your Gemini API key in <code className="text-teal-400">.env</code></span>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 flex items-center space-x-2">
+                  <Brain className="w-4 h-4 text-slate-400" />
+                  <span>Automated analysis is processing or pending verification.</span>
                 </div>
               )}
 
               {/* Metadata */}
               <div className="space-y-2 text-xs">
-                <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950 rounded-lg">
-                  <div><span className="text-slate-500">Menu / Item:</span> <strong className="text-slate-200">{selectedImage.meal_type || 'N/A'}</strong></div>
-                  <div><span className="text-slate-500">Staff:</span> <strong className="text-slate-200">{selectedImage.staff_name || 'N/A'}</strong></div>
-                  <div><span className="text-slate-500">Shift:</span> <strong className="text-slate-200">{selectedImage.inspection_shift || 'N/A'}</strong></div>
-                  <div><span className="text-slate-500">Status:</span> <strong className="text-teal-400">{selectedImage.status}</strong></div>
+                <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                  <div><span className="text-slate-500">Menu / Item:</span> <strong className="text-slate-900">{selectedImage.meal_type || 'N/A'}</strong></div>
+                  <div><span className="text-slate-500">Staff:</span> <strong className="text-slate-900">{selectedImage.staff_name || 'N/A'}</strong></div>
+                  <div><span className="text-slate-500">Shift:</span> <strong className="text-slate-900">{selectedImage.inspection_shift || 'N/A'}</strong></div>
+                  <div><span className="text-slate-500">Status:</span> <strong className="text-teal-700">{selectedImage.status}</strong></div>
                 </div>
 
                 {selectedImage.captured_location && (
-                  <p className="p-3 bg-slate-950 rounded-lg text-slate-300 text-[11px]">
-                    <span className="text-slate-500">📍 GPS Location:</span> {selectedImage.captured_location}
+                  <p className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 text-[11px]">
+                    <span className="text-slate-500 font-medium">Location:</span> {selectedImage.captured_location}
                   </p>
                 )}
                 {selectedImage.captured_timestamp && (
-                  <p className="p-3 bg-slate-950 rounded-lg text-slate-300 text-[11px]">
-                    <span className="text-slate-500">🕒 Capture Time:</span> {selectedImage.captured_timestamp}
+                  <p className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 text-[11px]">
+                    <span className="text-slate-500 font-medium">Capture Time:</span> {selectedImage.captured_timestamp}
                   </p>
                 )}
                 {selectedImage.hygiene_notes && (
-                  <p className="p-3 bg-slate-950 rounded-lg text-slate-300">
-                    <span className="text-slate-500">Hygiene Notes:</span> {selectedImage.hygiene_notes}
+                  <p className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-700">
+                    <span className="text-slate-500 font-medium">Hygiene Notes:</span> {selectedImage.hygiene_notes}
                   </p>
                 )}
 
                 <div>
-                  <label className="block text-slate-400 mb-1 font-medium">Administrator Verification Notes</label>
+                  <label className="block text-slate-700 mb-1 font-semibold">Administrator Verification Notes</label>
                   <textarea
                     rows={2}
                     placeholder="Enter compliance or deficiency observation notes..."
                     value={reviewNotes}
                     onChange={(e) => setReviewNotes(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-teal-500"
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-600 focus:border-teal-600"
                   />
                 </div>
               </div>
@@ -502,7 +503,7 @@ export const AdminMeals = () => {
                   type="button"
                   disabled={isReviewing}
                   onClick={() => handleReview(selectedImage.id, 'REJECTED')}
-                  className="px-3.5 py-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-semibold"
+                  className="px-3.5 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-xs font-semibold"
                 >
                   Reject Photo
                 </button>
@@ -510,7 +511,7 @@ export const AdminMeals = () => {
                   type="button"
                   disabled={isReviewing}
                   onClick={() => handleReview(selectedImage.id, 'FLAGGED')}
-                  className="px-3.5 py-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold"
+                  className="px-3.5 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-semibold"
                 >
                   Flag for Inspection
                 </button>
@@ -518,9 +519,9 @@ export const AdminMeals = () => {
                   type="button"
                   disabled={isReviewing}
                   onClick={() => handleReview(selectedImage.id, 'VERIFIED')}
-                  className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-bold shadow-md shadow-emerald-500/20"
+                  className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs"
                 >
-                  Verify &amp; Approve
+                  Verify & Approve
                 </button>
               </div>
             </div>

@@ -46,46 +46,43 @@ export const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative">
       {/* Language Selector Top Right */}
       <div className="absolute top-4 right-4 z-20">
         <LanguageToggle />
       </div>
 
-      {/* Background Subtle Ambient Glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="flex justify-center">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-teal-600 to-emerald-400 flex items-center justify-center shadow-xl shadow-teal-500/20 border border-teal-400/30">
-            <ShieldCheck className="w-8 h-8 text-white" />
+          <div className="w-12 h-12 rounded-xl bg-teal-600 flex items-center justify-center shadow-xs">
+            <ShieldCheck className="w-7 h-7 text-white" />
           </div>
         </div>
-        <h2 className="mt-4 text-center text-2xl font-extrabold tracking-tight text-white">
+        <h2 className="mt-4 text-center text-2xl font-bold tracking-tight text-slate-900">
           {t('portalTitle')}
         </h2>
-        <p className="mt-1 text-center text-xs text-teal-400 font-medium uppercase tracking-wider">
+        <p className="mt-1 text-center text-xs text-teal-700 font-semibold uppercase tracking-wider">
           {t('portalSubtitle')}
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4 sm:px-0">
-        <div className="bg-slate-900 border border-slate-800 py-8 px-6 shadow-2xl rounded-2xl sm:px-10">
+        <div className="bg-white border border-slate-200 py-8 px-6 shadow-sm rounded-xl sm:px-10">
           {errorMsg && (
-            <div className="mb-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-start space-x-2.5">
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <div className="mb-6 p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start space-x-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
                 {t('emailLabel')}
               </label>
-              <div className="relative rounded-lg shadow-sm">
+              <div className="relative rounded-lg">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-4 w-4 text-slate-500" />
+                  <Mail className="h-4 w-4 text-slate-400" />
                 </div>
                 <input
                   type="email"
@@ -93,18 +90,18 @@ export const Login = () => {
                   placeholder="admin@gmail.com or s1@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+                  className="block w-full pl-10 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-600 focus:border-teal-600 transition-colors"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
                 {t('passwordLabel')}
               </label>
-              <div className="relative rounded-lg shadow-sm">
+              <div className="relative rounded-lg">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-4 w-4 text-slate-500" />
+                  <Lock className="h-4 w-4 text-slate-400" />
                 </div>
                 <input
                   type="password"
@@ -112,7 +109,7 @@ export const Login = () => {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 transition-colors"
+                  className="block w-full pl-10 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-600 focus:border-teal-600 transition-colors"
                 />
               </div>
             </div>
@@ -121,10 +118,10 @@ export const Login = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-lg shadow-teal-500/20 text-sm font-semibold text-slate-950 bg-gradient-to-r from-teal-400 to-emerald-400 hover:from-teal-500 hover:to-emerald-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:opacity-50 transition-all cursor-pointer"
+                className="w-full flex justify-center items-center py-2.5 px-4 rounded-lg shadow-xs text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-600 disabled:opacity-50 transition-colors cursor-pointer"
               >
                 {isSubmitting ? (
-                  <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 ) : (
                   <>
                     <span>{t('signIn')}</span>
@@ -135,10 +132,10 @@ export const Login = () => {
             </div>
           </form>
 
-          <div className="mt-6 border-t border-slate-800 pt-5 text-center">
-            <p className="text-xs text-slate-400">
+          <div className="mt-6 border-t border-slate-100 pt-5 text-center">
+            <p className="text-xs text-slate-500">
               {t('needToRegister')}{' '}
-              <Link to="/register" className="font-semibold text-teal-400 hover:text-teal-300 hover:underline">
+              <Link to="/register" className="font-semibold text-teal-700 hover:text-teal-800 hover:underline">
                 {t('submitRegistration')}
               </Link>
             </p>

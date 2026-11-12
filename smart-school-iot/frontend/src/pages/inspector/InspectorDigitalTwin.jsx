@@ -48,7 +48,7 @@ export const InspectorDigitalTwin = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-teal-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-teal-600 border-t-transparent"></div>
       </div>
     );
   }
@@ -59,25 +59,25 @@ export const InspectorDigitalTwin = () => {
   return (
     <div className="space-y-6">
       {/* Top Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Water Tank Digital Twin</h1>
-          <p className="text-xs text-slate-400 mt-1">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Water Tank Digital Twin</h1>
+          <p className="text-xs text-slate-500 mt-1">
             Real-time physical tank digital twin simulation across your assigned government schools
           </p>
         </div>
 
         <div className="flex items-center space-x-3">
           {schools.length > 0 && (
-            <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5">
-              <Building2 className="w-4 h-4 text-teal-400" />
+            <div className="flex items-center space-x-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-xs">
+              <Building2 className="w-4 h-4 text-teal-600" />
               <select
                 value={selectedSchoolId || ''}
                 onChange={handleSchoolChange}
-                className="bg-transparent text-xs text-slate-200 font-semibold focus:outline-none cursor-pointer"
+                className="bg-transparent text-xs text-slate-800 font-semibold focus:outline-none cursor-pointer"
               >
                 {schools.map((s) => (
-                  <option key={s.id} value={s.id} className="bg-slate-900 text-slate-200">
+                  <option key={s.id} value={s.id}>
                     {s.name} ({s.school_code})
                   </option>
                 ))}
@@ -87,19 +87,19 @@ export const InspectorDigitalTwin = () => {
 
           <button
             onClick={() => { setRefreshing(true); fetchTwin(selectedSchoolId); }}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300 hover:text-white"
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-xs"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-teal-600' : 'text-slate-400'}`} />
             <span>Refresh</span>
           </button>
         </div>
       </div>
 
       {schools.length === 0 ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-16 text-center text-slate-400">
-          <Building2 className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-          <h3 className="text-base font-bold text-white">No Schools Assigned Yet</h3>
-          <p className="text-xs text-slate-500 mt-1">
+        <div className="bg-white border border-slate-200 rounded-xl p-16 text-center text-slate-500 shadow-xs">
+          <Building2 className="w-10 h-10 text-slate-400 mx-auto mb-2" />
+          <h3 className="text-base font-bold text-slate-900">No Schools Assigned Yet</h3>
+          <p className="text-xs text-slate-400 mt-1">
             Once the Central State Administrator assigns government schools to your profile, their water tank digital twins will be active here.
           </p>
         </div>

@@ -44,7 +44,7 @@ export const AdminDigitalTwin = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-teal-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-teal-600 border-t-transparent"></div>
       </div>
     );
   }
@@ -55,25 +55,25 @@ export const AdminDigitalTwin = () => {
   return (
     <div className="space-y-6">
       {/* Top Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Water Tank Digital Twin</h1>
-          <p className="text-xs text-slate-400 mt-1">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Water Tank Digital Twin</h1>
+          <p className="text-xs text-slate-500 mt-1">
             Physical simulation of water tank dynamics driven by real ESP32 ultrasonic and turbidity telemetry
           </p>
         </div>
 
         <div className="flex items-center space-x-3">
           {/* School Selector (Admin Only) */}
-          <div className="flex items-center space-x-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 shadow-sm">
-            <Building2 className="w-4 h-4 text-teal-400" />
+          <div className="flex items-center space-x-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-xs">
+            <Building2 className="w-4 h-4 text-teal-600" />
             <select
               value={selectedSchoolId || ''}
               onChange={handleSchoolChange}
-              className="bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer"
             >
               {schools.map((s) => (
-                <option key={s.id} value={s.id} className="bg-slate-900 text-white">
+                <option key={s.id} value={s.id}>
                   {s.name} ({s.school_code})
                 </option>
               ))}
@@ -83,9 +83,9 @@ export const AdminDigitalTwin = () => {
           <button
             onClick={() => { setRefreshing(true); fetchTwin(selectedSchoolId); }}
             disabled={refreshing}
-            className="p-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors"
+            className="p-2 bg-white border border-slate-200 rounded-lg text-slate-500 hover:text-slate-900 shadow-xs transition-colors"
           >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-teal-400' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-teal-600' : ''}`} />
           </button>
         </div>
       </div>

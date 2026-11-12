@@ -510,49 +510,151 @@ def update_alert_status(
 @router.get("/reports")
 def get_admin_reports(
     school_id: Optional[int] = Query(None),
+    category: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None),
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
     """
-    Reports strictly based on real stored data.
-    If no data exists: returns empty structures with has_data=False.
+    Comprehensive administrative compliance and audit report generator:
+    - Summary analytics (uploads, meal compliance, water purity rate, hardware status)
+    - Detailed photo uploads audit ledger (with CV analysis, student count, verification status, timestamps)
+    - School-by-school compliance and jurisdiction performance breakdown
+    - Sensor readings and physical hardware alert logs
+    - Recent administrative audit trail
     """
-    schools = db.query(School).filter(School.status == "ACTIVE").all()
+    schools = db.query(School).filter(School.status == "ACTIVE").order_by(School.name.asc()).all()
     selected_school = None
     if school_id:
         selected_school = db.query(School).filter(School.id == school_id).first()
-    elif schools:
-        selected_school = schools[0]
-        
+
+    # 1. Image Uploads Ledger
+    img_query = db.query(ImageSubmission)
+    if selected_school:
+        img_query = img_query.filter(ImageSubmission.school_id == selected_school.id)
+    if category:
+        img_query = img_query.filter(ImageSubmission.category == category)
+    if status_filter:
+        img_query = img_query.filter(ImageSubmission.status == status_filter)
+
+    uploads_records = img_query.order_by(ImageSubmission.created_at.desc()).limit(200).all()
+    school_map = {s.id: s for s in schools}
+    
+    uploads_data = []
+    for img in uploads_records:
+        sch = school_map.get(img.school_id)
+        uploads_data.append({
+            "id": img.id,
+            "school_id": img.school_id,
+            "school_name": sch.name if sch else f"School #{img.school_id}",
+            "school_code": sch.school_code if sch else "--",
+            "category": img.category,
+            "image_url": img.image_url,
+            "file_name": img.file_name,
+            "meal_type": img.meal_type or "Mid-Day Meal",
+            "menu_description": img.menu_description,
+            "staff_name": img.staff_name or "--",
+            "inspection_shift": img.inspection_shift or "Morning Prep",
+            "status": img.status,
+            "cv_status": img.cv_status,
+            "cv_notes": img.cv_notes,
+            "cv_confidence": img.cv_confidence,
+            "cv_student_count": img.cv_student_count,
+            "reviewed_by": img.reviewed_by,
+            "reviewed_at": img.reviewed_at,
+            "admin_notes": img.admin_notes,
+            "created_at": img.created_at
+        })
+
     readings = []
+    alerts = []
     if selected_school:
         readings = db.query(SensorReading).filter(
             SensorReading.school_id == selected_school.id
         ).order_by(SensorReading.recorded_at.desc()).limit(100).all()
         readings = list(reversed(readings))
-        
-    alerts = []
-    if selected_school:
         alerts = db.query(Alert).filter(
             Alert.school_id == selected_school.id
-        ).order_by(Alert.created_at.desc()).all()
+        ).order_by(Alert.created_at.desc()).limit(50).all()
+    elif schools:
+        alerts = db.query(Alert).order_by(Alert.created_at.desc()).limit(50).all()
+
+    base_img_q = db.query(ImageSubmission)
+    if selected_school:
+        base_img_q = base_img_q.filter(ImageSubmission.school_id == selected_school.id)
+
+    total_uploads = base_img_q.count()
+    images_verified = base_img_q.filter(ImageSubmission.status == "VERIFIED").count()
+    images_flagged = base_img_q.filter(ImageSubmission.status.in_(["FLAGGED", "CV_FLAG"])).count()
+    images_pending = base_img_q.filter(ImageSubmission.status.in_(["PENDING_REVIEW", "CV_PASS"])).count()
+    images_rejected = base_img_q.filter(ImageSubmission.status == "REJECTED").count()
+    compliance_rate = round((images_verified / total_uploads * 100), 1) if total_uploads > 0 else 100.0
+
+    readings_q = db.query(SensorReading)
+    if selected_school:
+        readings_q = readings_q.filter(SensorReading.school_id == selected_school.id)
+    total_readings = readings_q.count()
+    safe_readings = readings_q.filter(SensorReading.turbidity_ntu <= 5.0).count()
+    water_safe_rate = round((safe_readings / total_readings * 100), 1) if total_readings > 0 else 100.0
+
+    schools_matrix = []
+    for s in schools:
+        hw = evaluate_hardware(s)
+        s_uploads = db.query(ImageSubmission).filter(ImageSubmission.school_id == s.id).count()
+        s_verified = db.query(ImageSubmission).filter(ImageSubmission.school_id == s.id, ImageSubmission.status == "VERIFIED").count()
+        s_flagged = db.query(ImageSubmission).filter(ImageSubmission.school_id == s.id, ImageSubmission.status.in_(["FLAGGED", "CV_FLAG"])).count()
+        s_pending = db.query(ImageSubmission).filter(ImageSubmission.school_id == s.id, ImageSubmission.status.in_(["PENDING_REVIEW", "CV_PASS"])).count()
+        s_comp = round((s_verified / s_uploads * 100), 1) if s_uploads > 0 else 0.0
+        inspector_name = s.assigned_inspectors[0].full_name if s.assigned_inspectors else "Unassigned"
         
-    meal_submissions_count = db.query(MealSubmission).count()
-    images_verified_count = db.query(ImageSubmission).filter(ImageSubmission.status == "VERIFIED").count()
-    images_flagged_count = db.query(ImageSubmission).filter(ImageSubmission.status == "FLAGGED").count()
-    images_pending_count = db.query(ImageSubmission).filter(ImageSubmission.status == "PENDING_REVIEW").count()
-    
+        schools_matrix.append({
+            "school_id": s.id,
+            "school_name": s.name,
+            "school_code": s.school_code,
+            "district": s.district,
+            "total_uploads": s_uploads,
+            "verified_count": s_verified,
+            "flagged_count": s_flagged,
+            "pending_count": s_pending,
+            "compliance_pct": s_comp,
+            "hardware_status": hw["status"],
+            "hardware_label": hw["label"],
+            "assigned_inspector": inspector_name
+        })
+
+    recent_audits = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(20).all()
+
     return {
         "schools": [{"id": s.id, "name": s.name} for s in schools],
         "selected_school": selected_school,
+        "selected_school_id": selected_school.id if selected_school else None,
         "has_sensor_data": len(readings) > 0,
         "readings": readings,
         "alerts": alerts,
+        "uploads": uploads_data,
+        "schools_matrix": schools_matrix,
+        "recent_audits": [
+            {
+                "id": a.id,
+                "action": a.action,
+                "details": a.details,
+                "user_email": a.user_email,
+                "created_at": a.created_at
+            }
+            for a in recent_audits
+        ],
         "summary": {
-            "total_meals": meal_submissions_count,
-            "images_verified": images_verified_count,
-            "images_flagged": images_flagged_count,
-            "images_pending": images_pending_count
+            "total_uploads": total_uploads,
+            "images_verified": images_verified,
+            "images_flagged": images_flagged,
+            "images_pending": images_pending,
+            "images_rejected": images_rejected,
+            "compliance_rate": compliance_rate,
+            "total_readings": total_readings,
+            "safe_readings": safe_readings,
+            "water_safe_rate": water_safe_rate,
+            "total_schools": len(schools),
+            "total_meals": total_uploads
         }
     }
 
@@ -677,26 +779,40 @@ def process_inspector_approval(
 
 @router.get("/inspectors/available-schools")
 def get_available_schools_for_assignment(
+    inspector_id: Optional[int] = Query(None, description="Optional inspector ID to filter out schools assigned to other inspectors"),
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
     """
-    Fetch all active schools so admin can easily check/uncheck them to assign to an inspector.
+    Fetch schools available for assignment.
+    If inspector_id is provided, only returns schools that are either unassigned
+    or already assigned to THIS specific inspector (excluding any school assigned to other inspectors).
     """
     schools = db.query(School).filter(School.status == "ACTIVE").order_by(School.name.asc()).all()
-    return [
-        {
+    result = []
+    for s in schools:
+        assigned_inspectors_list = [
+            {"id": ins.id, "name": ins.full_name, "email": ins.email}
+            for ins in s.assigned_inspectors
+        ]
+        other_inspectors = [
+            ins for ins in s.assigned_inspectors
+            if inspector_id is None or ins.id != inspector_id
+        ]
+        
+        # If inspector_id is specified, exclude schools assigned to other inspectors
+        if inspector_id is not None and len(other_inspectors) > 0:
+            continue
+
+        result.append({
             "id": s.id,
             "name": s.name,
             "school_code": s.school_code,
             "district": s.district,
-            "assigned_inspectors": [
-                {"id": ins.id, "name": ins.full_name, "email": ins.email}
-                for ins in s.assigned_inspectors
-            ]
-        }
-        for s in schools
-    ]
+            "assigned_inspectors": assigned_inspectors_list,
+            "is_assigned_to_other": len(other_inspectors) > 0
+        })
+    return result
 
 @router.post("/inspectors/{inspector_id}/assign-schools")
 def assign_schools_to_inspector(
@@ -707,21 +823,32 @@ def assign_schools_to_inspector(
 ):
     """
     Admin assigns specific government schools to a Field Inspector.
+    Guarantees that a school cannot be assigned to more than one inspector.
     """
     inspector = db.query(User).filter(User.id == inspector_id, User.role == "INSPECTOR").first()
     if not inspector:
         raise HTTPException(status_code=404, detail="Inspector account not found")
         
-    schools = db.query(School).filter(School.id.in_(payload.school_ids)).all()
-    inspector.assigned_schools = schools
+    requested_schools = db.query(School).filter(School.id.in_(payload.school_ids)).all()
+    
+    # Check if any requested school is already assigned to another inspector
+    for s in requested_schools:
+        for ins in s.assigned_inspectors:
+            if ins.id != inspector_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"School '{s.name}' ({s.school_code}) is already assigned to inspector '{ins.full_name}'. A school cannot be assigned to multiple inspectors."
+                )
+
+    inspector.assigned_schools = requested_schools
     db.commit()
     db.refresh(inspector)
     
-    school_names = ", ".join([s.name for s in schools]) if schools else "None"
+    school_names = ", ".join([s.name for s in requested_schools]) if requested_schools else "None"
     log_audit(
         db=db,
         action="INSPECTOR_SCHOOLS_ASSIGNED",
-        details=f"Assigned {len(schools)} school(s) to Inspector {inspector.full_name} ({inspector.email}): {school_names}",
+        details=f"Assigned {len(requested_schools)} school(s) to Inspector {inspector.full_name} ({inspector.email}): {school_names}",
         user_email=current_user.email,
         user_id=current_user.id
     )
@@ -729,8 +856,8 @@ def assign_schools_to_inspector(
     return {
         "status": "success",
         "inspector_id": inspector.id,
-        "assigned_count": len(schools),
-        "assigned_schools": [{"id": s.id, "name": s.name, "code": s.school_code} for s in schools]
+        "assigned_count": len(requested_schools),
+        "assigned_schools": [{"id": s.id, "name": s.name, "code": s.school_code} for s in requested_schools]
     }
 
 @router.get("/inspectors/{inspector_id}/progress")
@@ -855,7 +982,11 @@ def get_inspector_progress(
                 "id": latest_overall_img.id,
                 "image_url": latest_overall_img.image_url,
                 "status": latest_overall_img.status,
+                "category": latest_overall_img.category,
                 "meal_type": latest_overall_img.meal_type,
+                "cv_status": latest_overall_img.cv_status,
+                "cv_notes": latest_overall_img.cv_notes,
+                "cv_student_count": latest_overall_img.cv_student_count,
                 "created_at": latest_overall_img.created_at,
                 "reviewed_by": latest_overall_img.reviewed_by
             } if (not today_images and latest_overall_img) else None

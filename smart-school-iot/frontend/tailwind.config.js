@@ -17,11 +17,11 @@ export default {
           900: '#134e4a',
         },
         gov: {
-          blue: '#1e3a8a',
+          blue: '#0284c7',
           dark: '#0f172a',
-          card: '#1e293b',
-          surface: '#0f172a',
-          border: '#334155'
+          card: '#ffffff',
+          surface: '#f8fafc',
+          border: '#e2e8f0'
         }
       }
     },

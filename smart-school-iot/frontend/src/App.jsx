@@ -44,6 +44,9 @@ import { InspectorMeals } from './pages/inspector/InspectorMeals';
 import { InspectorAlerts } from './pages/inspector/InspectorAlerts';
 import { InspectorProfile } from './pages/inspector/InspectorProfile';
 
+// Common Communications
+import { MessagesPage } from './pages/common/MessagesPage';
+
 export default function App() {
   return (
     <LanguageProvider>
@@ -71,6 +74,7 @@ export default function App() {
               <Route path="inspectors" element={<AdminInspectors />} />
               <Route path="approvals" element={<AdminApprovals />} />
               <Route path="alerts" element={<AdminAlerts />} />
+              <Route path="messages" element={<MessagesPage />} />
               <Route path="reports" element={<AdminReports />} />
               <Route path="profile" element={<AdminProfile />} />
             </Route>
@@ -86,6 +90,7 @@ export default function App() {
               <Route path="water" element={<InspectorWater />} />
               <Route path="meals" element={<InspectorMeals />} />
               <Route path="alerts" element={<InspectorAlerts />} />
+              <Route path="messages" element={<MessagesPage />} />
               <Route path="profile" element={<InspectorProfile />} />
             </Route>
           </Route>
@@ -99,6 +104,7 @@ export default function App() {
               <Route path="water" element={<SchoolWater />} />
               <Route path="meals" element={<SchoolMeals />} />
               <Route path="alerts" element={<SchoolAlerts />} />
+              <Route path="messages" element={<MessagesPage />} />
               <Route path="profile" element={<SchoolProfile />} />
             </Route>
           </Route>

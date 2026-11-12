@@ -3,14 +3,13 @@ import { schoolService, getImageUrl, FALLBACK_IMAGE } from '../../services/api';
 import { StaffUploadModal } from '../../components/StaffUploadModal';
 import {
   UtensilsCrossed,
-  PlusCircle,
-  Clock,
-  CheckCircle,
-  AlertTriangle,
-  XCircle,
-  RefreshCw,
   Camera,
-  Check
+  Check,
+  AlertTriangle,
+  RefreshCw,
+  PlusCircle,
+  Thermometer,
+  Calendar
 } from 'lucide-react';
 
 export const SchoolMeals = () => {
@@ -19,17 +18,16 @@ export const SchoolMeals = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('ALL');
-  
-  // Quick Meal Form state
+
+  // Meal Form State
   const [mealForm, setMealForm] = useState({
     meal_type: '',
     menu_description: '',
-    staff_name: '',
-    inspection_shift: 'Morning Prep',
+    students_served: '',
     hygiene_notes: ''
   });
   const [isSubmittingMeal, setIsSubmittingMeal] = useState(false);
-  const [mealSuccess, setMealSuccess] = useState(false);
+  const [mealSuccess, setMealSuccess] = useState('');
 
   const fetchMeals = async () => {
     try {
@@ -45,37 +43,31 @@ export const SchoolMeals = () => {
 
   useEffect(() => {
     fetchMeals();
-    // Auto-poll every 3.5 seconds so background CV updates and new uploads show automatically
-    const interval = setInterval(fetchMeals, 3500);
-
-    const handleUploaded = () => {
-      fetchMeals();
-      setTimeout(fetchMeals, 1500);
-      setTimeout(fetchMeals, 3500);
-    };
-    window.addEventListener('meal_uploaded', handleUploaded);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('meal_uploaded', handleUploaded);
-    };
+    const interval = setInterval(fetchMeals, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleMealSubmit = async (e) => {
     e.preventDefault();
-    if (!mealForm.meal_type || !mealForm.staff_name) return;
     setIsSubmittingMeal(true);
+    setMealSuccess('');
+
     try {
-      await schoolService.submitMeal(mealForm);
-      setMealSuccess(true);
+      await schoolService.createMeal({
+        meal_type: mealForm.meal_type,
+        menu_description: mealForm.menu_description,
+        students_served: mealForm.students_served ? parseInt(mealForm.students_served) : null,
+        hygiene_notes: mealForm.hygiene_notes
+      });
+      setMealSuccess('Meal log submitted successfully.');
       setMealForm({
         meal_type: '',
         menu_description: '',
-        staff_name: '',
-        inspection_shift: 'Morning Prep',
+        students_served: '',
         hygiene_notes: ''
       });
       fetchMeals();
-      setTimeout(() => setMealSuccess(false), 3000);
+      setTimeout(() => setMealSuccess(''), 4000);
     } catch (err) {
       console.error(err);
     } finally {
@@ -86,7 +78,7 @@ export const SchoolMeals = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-teal-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-teal-600 border-t-transparent"></div>
       </div>
     );
   }
@@ -95,12 +87,12 @@ export const SchoolMeals = () => {
   const filteredImages = categoryFilter === 'ALL' ? images : images.filter((img) => img.category === categoryFilter);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Mid-Day Meal & Kitchen Management</h1>
-          <p className="text-xs text-slate-400 mt-1">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Mid-Day Meal & Kitchen Management</h1>
+          <p className="text-xs text-slate-500 mt-1">
             Submit daily meal preparation details and upload inspection photos for state review
           </p>
         </div>
@@ -109,16 +101,16 @@ export const SchoolMeals = () => {
           <button
             onClick={() => { setRefreshing(true); fetchMeals(); }}
             disabled={refreshing}
-            className="flex items-center space-x-1.5 px-3 py-2 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl"
+            className="flex items-center space-x-1.5 px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-xs"
             title="Refresh submissions"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-teal-400' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-teal-600' : 'text-slate-400'}`} />
             <span>Refresh</span>
           </button>
 
           <button
             onClick={() => setUploadModalOpen(true)}
-            className="flex items-center space-x-1.5 px-4 py-2 bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-teal-500/20"
+            className="flex items-center space-x-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
           >
             <Camera className="w-4 h-4" />
             <span>+ Upload Inspection Photo</span>
@@ -129,82 +121,75 @@ export const SchoolMeals = () => {
       {/* Grid: Meal Form & Kitchen Environmental Status */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Meal Submission Form */}
-        <div className="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-            <h2 className="text-base font-bold text-white flex items-center space-x-2">
-              <UtensilsCrossed className="w-5 h-5 text-teal-400" />
+        <div className="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+            <h2 className="text-base font-bold text-slate-900 flex items-center space-x-2">
+              <UtensilsCrossed className="w-5 h-5 text-teal-600" />
               <span>Log Daily Mid-Day Meal Menu</span>
             </h2>
             <span className="text-[10px] text-slate-500 font-mono">{new Date().toLocaleDateString()}</span>
           </div>
 
           {mealSuccess && (
-            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center space-x-2">
-              <Check className="w-4 h-4 text-emerald-400" />
-              <span>Meal record submitted successfully!</span>
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs flex items-center space-x-2">
+              <Check className="w-4 h-4 text-emerald-600" />
+              <span>{mealSuccess}</span>
             </div>
           )}
 
-          <form onSubmit={handleMealSubmit} className="space-y-4 text-xs">
+          <form onSubmit={handleMealSubmit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Meal Type / Main Dish *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Today's Prepared Meal Menu <span className="text-rose-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Sambar Rice & Boiled Egg"
+                  placeholder="e.g. Rice, Sambar, Boiled Egg, Chikki"
                   value={mealForm.meal_type}
                   onChange={(e) => setMealForm({ ...mealForm, meal_type: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:border-teal-500 placeholder-slate-600"
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-600 focus:border-teal-600"
                 />
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1 font-medium">Inspection Shift *</label>
-                <select
-                  value={mealForm.inspection_shift}
-                  onChange={(e) => setMealForm({ ...mealForm, inspection_shift: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:border-teal-500"
-                >
-                  <option value="Morning Prep">Morning Prep (8:00 AM - 11:00 AM)</option>
-                  <option value="Lunch Serving">Lunch Serving (12:00 PM - 2:00 PM)</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-slate-400 mb-1 font-medium">Cook / Staff Name *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Students Attended / Served
+                </label>
                 <input
-                  type="text"
-                  required
-                  placeholder="e.g. S. Lakshmi Devi"
-                  value={mealForm.staff_name}
-                  onChange={(e) => setMealForm({ ...mealForm, staff_name: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:border-teal-500 placeholder-slate-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 mb-1 font-medium">Menu Description</label>
-                <input
-                  type="text"
-                  placeholder="Ingredients, pulses, seasonal vegetables"
-                  value={mealForm.menu_description}
-                  onChange={(e) => setMealForm({ ...mealForm, menu_description: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:border-teal-500 placeholder-slate-600"
+                  type="number"
+                  placeholder="e.g. 142"
+                  value={mealForm.students_served}
+                  onChange={(e) => setMealForm({ ...mealForm, students_served: e.target.value })}
+                  className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-600 focus:border-teal-600"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-slate-400 mb-1 font-medium">Hygiene & Cooking Notes</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Ingredients & Preparation Details
+              </label>
               <textarea
                 rows={2}
-                placeholder="Sanitation observed, filtered water used for cooking, cleanliness checked."
+                placeholder="Mention ingredient quality, cooking oil, freshness of vegetables, drinking water utilized."
+                value={mealForm.menu_description}
+                onChange={(e) => setMealForm({ ...mealForm, menu_description: e.target.value })}
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-600 focus:border-teal-600 resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Kitchen Hygiene & Sanitization Notes
+              </label>
+              <input
+                type="text"
+                placeholder="Cooking pots sanitized, clean uniforms, storage lids closed."
                 value={mealForm.hygiene_notes}
                 onChange={(e) => setMealForm({ ...mealForm, hygiene_notes: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white focus:border-teal-500 placeholder-slate-600 resize-none"
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-600 focus:border-teal-600"
               />
             </div>
 
@@ -212,31 +197,56 @@ export const SchoolMeals = () => {
               <button
                 type="submit"
                 disabled={isSubmittingMeal}
-                className="px-5 py-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-slate-950 font-bold text-xs shadow-md shadow-teal-500/20"
+                className="px-5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-xs transition-colors cursor-pointer"
               >
-                {isSubmittingMeal ? 'Submitting...' : 'Register Meal Entry'}
+                {isSubmittingMeal ? 'Submitting...' : 'Save Daily Meal Log'}
               </button>
             </div>
           </form>
         </div>
 
-        {/* Real Kitchen Humidity Diagnostics */}
-        <div className="lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-          <h3 className="text-sm font-bold text-white">Kitchen Environment Sensor</h3>
-          
-          <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-center">
-            <span className="text-xs text-slate-400">Relative Humidity</span>
-            <div className="text-3xl font-extrabold text-white font-mono mt-1">
-              {latest_sensor && latest_sensor.humidity_pct !== undefined
-                ? `${latest_sensor.humidity_pct}%`
-                : '--'}
+        {/* Real Kitchen Environment Sensor Box */}
+        <div className="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-6 shadow-xs flex flex-col justify-between space-y-4">
+          <div>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-1.5">
+                <Thermometer className="w-4 h-4 text-teal-600" />
+                <span>Kitchen Telemetry</span>
+              </h3>
+              <span className={`w-2 h-2 rounded-full ${latest_sensor?.humidity_pct !== undefined ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
             </div>
-            <p className="text-[11px] text-slate-500 mt-1">
-              {latest_sensor ? `Status: ${latest_sensor.humidity_status}` : 'Waiting for Sensor Data'}
-            </p>
+
+            <div className="mt-4 space-y-3">
+              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                <span className="text-[11px] text-slate-500 font-medium">Kitchen Relative Humidity</span>
+                <p className="text-2xl font-bold font-mono text-slate-900 mt-1">
+                  {latest_sensor?.humidity_pct !== undefined ? `${latest_sensor.humidity_pct}%` : '--'}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  {latest_sensor?.humidity_pct !== undefined ? (
+                    latest_sensor.humidity_pct > 75 ? (
+                      <span className="text-amber-700 font-medium">High humidity: ensure kitchen ventilation</span>
+                    ) : (
+                      <span className="text-emerald-700 font-medium">Optimal kitchen range (40% - 70%)</span>
+                    )
+                  ) : (
+                    'DHT Sensor Offline'
+                  )}
+                </p>
+              </div>
+
+              {latest_sensor?.temperature_c !== undefined && (
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                  <span className="text-[11px] text-slate-500 font-medium">Kitchen Temperature</span>
+                  <p className="text-2xl font-bold font-mono text-slate-900 mt-1">
+                    {latest_sensor.temperature_c}°C
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
-          <p className="text-[11px] text-slate-500 leading-relaxed">
+          <p className="text-[10px] text-slate-500 italic leading-relaxed pt-2 border-t border-slate-100">
             Strictly driven by physical DHT sensor deployed in the school kitchen. Temperature is only displayed if physically reported by the hardware.
           </p>
         </div>
@@ -245,27 +255,27 @@ export const SchoolMeals = () => {
       {/* Uploaded Photo Submissions & Status Tracking */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <h2 className="text-base font-bold text-white flex items-center space-x-2">
-            <Camera className="w-5 h-5 text-teal-400" />
+          <h2 className="text-base font-bold text-slate-900 flex items-center space-x-2">
+            <Camera className="w-5 h-5 text-teal-600" />
             <span>Uploaded Inspection Photos ({images.length})</span>
           </h2>
 
           {/* Category Filter Tabs */}
-          <div className="flex items-center space-x-1.5 bg-slate-900 border border-slate-800 p-1 rounded-xl text-xs">
+          <div className="flex items-center space-x-1.5 bg-white border border-slate-200 p-1 rounded-lg text-xs shadow-xs">
             {[
               { id: 'ALL', label: 'All Photos' },
-              { id: 'MEAL_PREPARATION', label: '🥘 Meal Prep' },
-              { id: 'KITCHEN_HYGIENE', label: '🧼 Kitchen Hygiene' },
-              { id: 'STUDENT_EATING', label: '👥 Students Eating' },
+              { id: 'MEAL_PREPARATION', label: 'Meal Prep' },
+              { id: 'KITCHEN_HYGIENE', label: 'Kitchen Hygiene' },
+              { id: 'STUDENT_EATING', label: 'Students Eating' },
             ].map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setCategoryFilter(tab.id)}
-                className={`px-3 py-1 rounded-lg font-medium transition-colors ${
+                className={`px-3 py-1 rounded-md font-semibold transition-colors ${
                   categoryFilter === tab.id
-                    ? 'bg-teal-500 text-slate-950 font-bold shadow'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 {tab.label}
@@ -275,29 +285,32 @@ export const SchoolMeals = () => {
         </div>
 
         {filteredImages.length === 0 ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-xs text-slate-500 italic">
+          <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-xs text-slate-500 italic">
             No Submissions Yet in this category. Use the upload button above to submit photos.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredImages.map((img) => {
               const categoryLabel =
-                img.category === 'MEAL_PREPARATION' ? '🥘 Meal Prep' :
-                img.category === 'STUDENT_EATING' ? '👥 Students Eating' :
-                '🧼 Kitchen Hygiene';
+                img.category === 'MEAL_PREPARATION' ? 'Meal Prep' :
+                img.category === 'STUDENT_EATING' ? 'Students Eating' :
+                'Kitchen Hygiene';
+
+              const isZeroStudents = img.category === 'STUDENT_EATING' && (img.cv_student_count === 0 || img.cv_student_count === '0');
+              const effectiveStatus = (isZeroStudents && img.status === 'CV_PASS') ? 'CV_FLAG' : img.status;
 
               const statusColor =
-                img.status === 'VERIFIED' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' :
-                img.status === 'CV_PASS'  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' :
-                img.status === 'FLAGGED'  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
-                img.status === 'CV_FLAG'  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
-                img.status === 'REJECTED' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
-                'bg-slate-800 text-slate-300 border-slate-700';
+                effectiveStatus === 'VERIFIED' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                effectiveStatus === 'CV_PASS'  ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                effectiveStatus === 'FLAGGED'  ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                effectiveStatus === 'CV_FLAG'  ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                effectiveStatus === 'REJECTED' ? 'bg-rose-50 text-rose-800 border-rose-200' :
+                'bg-slate-100 text-slate-700 border-slate-200';
 
               return (
-                <div key={img.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg flex flex-col justify-between hover:border-slate-700 transition-colors">
+                <div key={img.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs flex flex-col justify-between hover:border-slate-300 transition-colors">
                   <div>
-                    <div className="relative h-44 bg-slate-950">
+                    <div className="relative h-44 bg-slate-100">
                       <img
                         src={getImageUrl(img.image_url)}
                         alt="Meal Inspection"
@@ -306,57 +319,54 @@ export const SchoolMeals = () => {
                       />
                       
                       {/* Category Badge */}
-                      <span className="absolute top-3 left-3 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-900/90 text-teal-300 border border-teal-500/30">
+                      <span className="absolute top-3 left-3 px-2 py-0.5 rounded-md text-[10px] font-bold bg-white/95 text-slate-800 border border-slate-200 shadow-xs">
                         {categoryLabel}
                       </span>
 
                       {/* Status Pill */}
                       <span className={`absolute top-3 right-3 px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusColor}`}>
-                        {img.status}
+                        {effectiveStatus}
                       </span>
 
                       {/* Student Count Badge for Students Eating */}
                       {img.category === 'STUDENT_EATING' && (
-                        <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-violet-600/90 text-white border border-violet-400/40 shadow-md flex items-center space-x-1">
-                          <span>👥</span>
-                          <span>
-                            {img.cv_student_count != null
-                              ? `~${img.cv_student_count} students`
-                              : (img.status === 'PENDING_REVIEW' ? 'Counting students…' : '0 students')}
-                          </span>
+                        <span className="absolute bottom-3 left-3 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-900/90 text-white shadow-xs">
+                          {img.cv_student_count != null
+                            ? `${img.cv_student_count} students`
+                            : (img.status === 'PENDING_REVIEW' ? 'Counting students…' : '0 students')}
                         </span>
                       )}
                     </div>
 
                     <div className="p-4 space-y-1.5 text-xs">
-                      <p className="font-bold text-white text-sm">{img.meal_type || 'Photo Inspection'}</p>
-                      <p className="text-slate-400 text-[11px]">Staff: {img.staff_name || 'Staff'} • {img.inspection_shift}</p>
+                      <p className="font-bold text-slate-900 text-sm">{img.meal_type || 'Photo Inspection'}</p>
+                      <p className="text-slate-500 text-[11px]">Staff: {img.staff_name || 'Staff'} • {img.inspection_shift}</p>
 
                       {/* CV result display */}
                       {img.cv_notes && (
                         <div className={`mt-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] ${
-                          img.cv_status === 'CV_PASS' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' :
-                          img.cv_status === 'CV_FLAG' ? 'bg-rose-500/10 border-rose-500/20 text-rose-300' :
-                          'bg-slate-800/80 border-slate-700 text-slate-400'
+                          (img.cv_status === 'CV_PASS' && !isZeroStudents) ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                          (img.cv_status === 'CV_FLAG' || isZeroStudents) ? 'bg-rose-50 border-rose-200 text-rose-800' :
+                          'bg-slate-50 border-slate-200 text-slate-600'
                         }`}>
-                          <span className="font-semibold">🤖 CV: </span>{img.cv_notes}
+                          <span className="font-semibold">Analysis: </span>{img.cv_notes}
                         </div>
                       )}
 
                       {img.hygiene_notes && (
-                        <p className="text-[11px] text-slate-400 italic bg-slate-950 p-2 rounded border border-slate-800">
+                        <p className="text-[11px] text-slate-600 italic bg-slate-50 p-2 rounded border border-slate-200">
                           "{img.hygiene_notes}"
                         </p>
                       )}
                       {img.admin_notes && (
-                        <p className="text-[11px] text-teal-300 bg-teal-500/10 p-2 rounded border border-teal-500/20">
+                        <p className="text-[11px] text-teal-900 bg-teal-50 p-2 rounded border border-teal-200">
                           Admin Note: {img.admin_notes}
                         </p>
                       )}
                     </div>
                   </div>
 
-                  <div className="p-3 border-t border-slate-800 bg-slate-950/40 text-[10px] text-slate-500 font-mono">
+                  <div className="p-3 border-t border-slate-100 bg-slate-50/50 text-[10px] text-slate-500 font-mono">
                     Submitted: {new Date(img.created_at).toLocaleString()}
                   </div>
                 </div>

@@ -4,6 +4,7 @@ from .user import User
 from .sensor import SensorReading
 from .meal import MealSubmission, ImageSubmission
 from .alert import Alert, AuditLog
+from .message import Message
 
 __all__ = [
     "Base",
@@ -13,5 +14,6 @@ __all__ = [
     "MealSubmission",
     "ImageSubmission",
     "Alert",
-    "AuditLog"
+    "AuditLog",
+    "Message"
 ]

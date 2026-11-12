@@ -15,8 +15,9 @@ from .api.admin_routes import router as admin_router
 from .api.school_routes import router as school_router
 from .api.hardware_routes import router as hardware_router
 from .api.inspector_routes import router as inspector_router
+from .api.message_routes import router as message_router
 
-# Create all database tables (including inspector_schools)
+# Create all database tables (including inspector_schools and messages)
 Base.metadata.create_all(bind=engine)
 
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/tmp/uploads" if os.getenv("VERCEL") else "uploads")
@@ -46,6 +47,7 @@ app.include_router(admin_router)
 app.include_router(school_router)
 app.include_router(hardware_router)
 app.include_router(inspector_router)
+app.include_router(message_router)
 
 @app.on_event("startup")
 def seed_initial_data():

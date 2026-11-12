@@ -4,7 +4,7 @@ const isLocalhost = typeof window !== 'undefined' &&
   (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
 const envApiUrl = import.meta.env.VITE_API_URL;
-const rawApiUrl = isLocalhost ? '' : (envApiUrl || 'https://smart-school-iot-backend.onrender.com');
+const rawApiUrl = envApiUrl || '';
 const baseURL = rawApiUrl
   ? `${rawApiUrl.replace(/\/+$/, '')}/api`
   : '/api';
@@ -75,13 +75,13 @@ export const adminService = {
   reviewImage: (imageId, status, admin_notes) => API.post(`/admin/images/${imageId}/review`, { status, admin_notes }),
   getAlerts: (params) => API.get('/admin/alerts', { params }),
   actOnAlert: (alertId, status, notes) => API.post(`/admin/alerts/${alertId}/action`, { status, notes }),
-  getReports: (schoolId) => API.get('/admin/reports', { params: { school_id: schoolId } }),
+  getReports: (param) => API.get('/admin/reports', { params: typeof param === 'object' ? param : (param ? { school_id: param } : {}) }),
   getAuditLogs: () => API.get('/admin/audit-logs'),
   // Inspector management & progress tracking
   getInspectors: () => API.get('/admin/inspectors'),
   getPendingInspectors: () => API.get('/admin/inspectors/pending'),
   processInspectorApproval: (inspectorId, action, notes) => API.post(`/admin/inspectors/${inspectorId}/approval`, { action, notes }),
-  getAvailableSchools: () => API.get('/admin/inspectors/available-schools'),
+  getAvailableSchools: (inspectorId) => API.get('/admin/inspectors/available-schools', { params: inspectorId ? { inspector_id: inspectorId } : {} }),
   assignSchoolsToInspector: (inspectorId, schoolIds) => API.post(`/admin/inspectors/${inspectorId}/assign-schools`, { school_ids: schoolIds }),
   getInspectorProgress: (inspectorId) => API.get(`/admin/inspectors/${inspectorId}/progress`)
 };
@@ -108,6 +108,9 @@ export const schoolService = {
   uploadImage: (formData) => API.post('/school/upload-image', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
+  uploadMealImage: (formData) => API.post('/school/upload-image', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
   getAlerts: () => API.get('/school/alerts'),
   getProfile: () => API.get('/school/profile')
 };
@@ -116,6 +119,16 @@ export const schoolService = {
 export const hardwareService = {
   sendTelemetry: (payload) => API.post('/hardware/telemetry', payload),
   checkStatus: (schoolId) => API.get(`/hardware/status/${schoolId}`)
+};
+
+// Message & Email Notification endpoints
+export const messageService = {
+  getRecipients: () => API.get('/messages/recipients'),
+  sendMessage: (payload) => API.post('/messages/send', payload),
+  getInbox: () => API.get('/messages/inbox'),
+  getSent: () => API.get('/messages/sent'),
+  getUnreadCount: () => API.get('/messages/unread-count'),
+  markAsRead: (messageId) => API.put(`/messages/${messageId}/read`)
 };
 
 export default API;

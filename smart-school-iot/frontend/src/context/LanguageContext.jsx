@@ -13,6 +13,7 @@ export const translations = {
     inspectors: 'Inspectors & Progress',
     schoolApprovals: 'School Approvals',
     alerts: 'Incident & Alerts',
+    messages: 'Messages & Mail',
     reports: 'Reports',
     profile: 'Profile',
     schools: 'Schools',
@@ -122,6 +123,7 @@ export const translations = {
     inspectors: 'పరిశీలకులు & పురోగతి',
     schoolApprovals: 'పాఠశాల అనుమతులు',
     alerts: 'సంఘటన & హెచ్చరికలు',
+    messages: 'సందేశాలు & మెయిల్',
     reports: 'నివేదికలు',
     profile: 'ప్రొఫైల్',
     schools: 'పాఠశాలలు',
@@ -231,6 +233,7 @@ export const translations = {
     inspectors: 'ஆய்வாளர்கள் & முன்னேற்றம்',
     schoolApprovals: 'பள்ளி அனுமதிகள்',
     alerts: 'சம்பவம் & எச்சரிக்கைகள்',
+    messages: 'செய்திகள் & மின்னஞ்சல்',
     reports: 'அறிக்கைகள்',
     profile: 'சுயவிவரம்',
     schools: 'பள்ளிகள்',
@@ -332,9 +335,9 @@ export const translations = {
 };
 
 export const languages = [
-  { code: 'en', label: 'English', flag: '🇬🇧', nativeLabel: 'English' },
-  { code: 'te', label: 'Telugu', flag: '🇮🇳', nativeLabel: 'తెలుగు' },
-  { code: 'ta', label: 'Tamil', flag: '🇮🇳', nativeLabel: 'தமிழ்' },
+  { code: 'en', label: 'English', tag: 'EN', nativeLabel: 'English' },
+  { code: 'te', label: 'Telugu', tag: 'TE', nativeLabel: 'తెలుగు' },
+  { code: 'ta', label: 'Tamil', tag: 'TA', nativeLabel: 'தமிழ்' },
 ];
 
 export const LanguageProvider = ({ children }) => {

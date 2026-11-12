@@ -11,7 +11,7 @@ def process_sensor_telemetry(
     school: School,
     distance_cm: float = None,
     turbidity_ntu: float = 0.0,
-    humidity_pct: float = 0.0,
+    humidity_pct: float = None,
     turbidity_voltage: float = None,
     temperature_c: float = None,
     raw_payload: str = None
@@ -54,9 +54,11 @@ def process_sensor_telemetry(
         turbidity_status = "MODERATE"
         
     # Kitchen humidity condition
-    humidity_status = "NORMAL"
-    if humidity_pct > school.humidity_threshold_pct:
-        humidity_status = "HIGH"
+    humidity_status = "N/A"
+    if humidity_pct is not None:
+        humidity_status = "NORMAL"
+        if humidity_pct > school.humidity_threshold_pct:
+            humidity_status = "HIGH"
         
     # Save reading to database
     reading = SensorReading(
@@ -68,7 +70,7 @@ def process_sensor_telemetry(
         turbidity_ntu=round(turbidity_ntu, 2),
         turbidity_voltage=round(turbidity_voltage, 3) if turbidity_voltage is not None else None,
         turbidity_status=turbidity_status,
-        humidity_pct=round(humidity_pct, 1),
+        humidity_pct=round(humidity_pct, 1) if humidity_pct is not None else None,
         humidity_status=humidity_status,
         temperature_c=round(temperature_c, 1) if temperature_c is not None else None,
         raw_payload=raw_payload,

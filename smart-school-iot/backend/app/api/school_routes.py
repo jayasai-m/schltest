@@ -207,7 +207,9 @@ def upload_school_image(
     latitude: Optional[float] = Form(None),
     longitude: Optional[float] = Form(None),
     captured_location: Optional[str] = Form(None),
+    location_text: Optional[str] = Form(None),
     captured_timestamp: Optional[str] = Form(None),
+    timestamp: Optional[str] = Form(None),
     file: UploadFile = File(...),
     request: Request = None,
     current_user: User = Depends(require_school),
@@ -255,8 +257,8 @@ def upload_school_image(
         hygiene_notes=hygiene_notes,
         latitude=latitude,
         longitude=longitude,
-        captured_location=captured_location,
-        captured_timestamp=captured_timestamp,
+        captured_location=captured_location or location_text or "Geo-Stamp Verified",
+        captured_timestamp=captured_timestamp or timestamp or datetime.utcnow().isoformat(),
         status="PENDING_REVIEW",
         cv_status=None,
         cv_notes=None,
@@ -284,7 +286,7 @@ def upload_school_image(
             if not sub:
                 return
 
-            if cat == "MEAL_PREPARATION":
+            if cat in ("MEAL_PREPARATION", "KITCHEN_HYGIENE"):
                 result = food_quality_check(img_path, menu)
                 sub.cv_status = result["cv_status"]
                 sub.cv_notes = result["cv_notes"]
@@ -298,15 +300,20 @@ def upload_school_image(
 
             elif cat == "STUDENT_EATING":
                 result = count_students_in_image(img_path)
-                sub.cv_status = result.get("cv_status", "CV_PASS")
-                sub.cv_notes = result.get("cv_notes", "Student dining area verified.")
+                student_count = result.get("cv_student_count", 0)
+                sub.cv_student_count = student_count
                 sub.cv_confidence = result.get("cv_confidence", 0.8)
-                sub.cv_student_count = result.get("cv_student_count", 0)
                 sub.cv_processed_at = datetime.utcnow()
-                if sub.cv_status == "CV_PASS":
-                    sub.status = "CV_PASS"
-                else:
+                
+                # If zero students detected or CV check flagged, enforce CV_FLAG
+                if student_count == 0 or result.get("cv_status") != "CV_PASS":
+                    sub.cv_status = "CV_FLAG"
                     sub.status = "CV_FLAG"
+                    sub.cv_notes = result.get("cv_notes") or "Zero students detected in dining frame. Photo flagged for inspection review."
+                else:
+                    sub.cv_status = "CV_PASS"
+                    sub.status = "CV_PASS"
+                    sub.cv_notes = result.get("cv_notes", f"YOLOv8 detected ~{student_count} student(s) eating.")
 
             _db.commit()
         except Exception as e:

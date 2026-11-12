@@ -7,19 +7,12 @@ import {
   Clock,
   AlertTriangle,
   RefreshCw,
-  Search,
-  Filter,
   Plus,
   ShieldCheck,
   ChevronRight,
   Droplets,
   UtensilsCrossed,
-  X,
-  XCircle,
-  FileCheck2,
-  Eye,
-  Camera,
-  Activity
+  X
 } from 'lucide-react';
 
 export const AdminInspectors = () => {
@@ -46,7 +39,6 @@ export const AdminInspectors = () => {
       setInspectors(insRes.data);
       setAvailableSchools(schoolsRes.data);
       
-      // Auto-select first inspector if none selected
       if (insRes.data.length > 0 && !selectedInspectorId) {
         setSelectedInspectorId(insRes.data[0].id);
         fetchProgress(insRes.data[0].id);
@@ -81,11 +73,17 @@ export const AdminInspectors = () => {
     fetchProgress(id);
   };
 
-  const openAssignModal = (inspector, e) => {
+  const openAssignModal = async (inspector, e) => {
     if (e) e.stopPropagation();
     setAssigningInspector(inspector);
     setSelectedSchoolIds(inspector.assigned_schools.map((s) => s.id));
     setIsAssignModalOpen(true);
+    try {
+      const res = await adminService.getAvailableSchools(inspector.id);
+      setAvailableSchools(res.data || []);
+    } catch (err) {
+      console.error('Error fetching available schools:', err);
+    }
   };
 
   const toggleSchoolSelection = (schoolId) => {
@@ -102,12 +100,16 @@ export const AdminInspectors = () => {
     setActionMessage('');
     try {
       await adminService.assignSchoolsToInspector(assigningInspector.id, selectedSchoolIds);
-      setActionMessage(`Schools assigned successfully to ${assigningInspector.full_name}!`);
+      setActionMessage(`Schools assigned successfully to ${assigningInspector.full_name}`);
       setIsAssignModalOpen(false);
       fetchInspectors();
+      if (selectedInspectorId === assigningInspector.id) {
+        fetchProgress(assigningInspector.id);
+      }
+      setTimeout(() => setActionMessage(''), 4000);
     } catch (err) {
       console.error(err);
-      setActionMessage('Failed to update school assignments.');
+      alert('Failed to update school assignments');
     } finally {
       setAssignLoading(false);
     }
@@ -116,7 +118,7 @@ export const AdminInspectors = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-teal-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-teal-600 border-t-transparent"></div>
       </div>
     );
   }
@@ -127,74 +129,74 @@ export const AdminInspectors = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Field Inspectors & Compliance Tracking</h1>
-          <p className="text-xs text-slate-400 mt-1">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Field Inspectors & Compliance Tracking</h1>
+          <p className="text-xs text-slate-500 mt-1">
             Assign government schools to field inspectors and monitor real-time verification of water telemetry and mid-day meals
           </p>
         </div>
 
         <button
           onClick={fetchInspectors}
-          className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300 hover:text-white"
+          className="flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-xs cursor-pointer"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
+          <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
           <span>Refresh</span>
         </button>
       </div>
 
       {actionMessage && (
-        <div className="p-3 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-300 text-xs flex items-center space-x-2">
-          <CheckCircle2 className="w-4 h-4 shrink-0 text-teal-400" />
+        <div className="p-3 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 text-xs flex items-center space-x-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0 text-teal-600" />
           <span>{actionMessage}</span>
         </div>
       )}
 
       {/* Top Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Inspectors</span>
-            <div className="p-2 rounded-xl bg-teal-500/10 text-teal-400">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Inspectors</span>
+            <div className="p-2 rounded-lg bg-teal-50 text-teal-700">
               <UserCheck className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-white mt-2">{inspectors.length}</p>
-          <span className="text-[11px] text-teal-400 font-medium">Registered Inspectors</span>
+          <p className="text-2xl font-bold text-slate-900 mt-2">{inspectors.length}</p>
+          <span className="text-[11px] text-teal-700 font-medium">Registered Inspectors</span>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Monitoring</span>
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Monitoring</span>
+            <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700">
               <ShieldCheck className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-white mt-2">{activeInspectorsCount}</p>
-          <span className="text-[11px] text-emerald-400 font-medium">Approved & Field Active</span>
+          <p className="text-2xl font-bold text-slate-900 mt-2">{activeInspectorsCount}</p>
+          <span className="text-[11px] text-emerald-700 font-medium">Approved & Field Active</span>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Schools Under Inspection</span>
-            <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Schools Under Inspection</span>
+            <div className="p-2 rounded-lg bg-teal-50 text-teal-700">
               <Building2 className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-white mt-2">{totalAssignedSchools}</p>
-          <span className="text-[11px] text-cyan-400 font-medium">Institutions Monitored</span>
+          <p className="text-2xl font-bold text-slate-900 mt-2">{totalAssignedSchools}</p>
+          <span className="text-[11px] text-teal-700 font-medium">Institutions Monitored</span>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Available Schools</span>
-            <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Available Schools</span>
+            <div className="p-2 rounded-lg bg-slate-100 text-slate-700">
               <Plus className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-black text-white mt-2">{availableSchools.length}</p>
-          <span className="text-[11px] text-purple-400 font-medium">Active Government Schools</span>
+          <p className="text-2xl font-bold text-slate-900 mt-2">{availableSchools.length}</p>
+          <span className="text-[11px] text-slate-600 font-medium">Active Government Schools</span>
         </div>
       </div>
 
@@ -203,15 +205,15 @@ export const AdminInspectors = () => {
         {/* Left Column: Inspectors List */}
         <div className="lg:col-span-4 space-y-3">
           <div className="flex items-center justify-between pb-1">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-              <UserCheck className="w-4 h-4 text-teal-400" />
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+              <UserCheck className="w-4 h-4 text-teal-600" />
               <span>Select Inspector ({inspectors.length})</span>
             </h2>
-            <span className="text-[10px] text-slate-500">Click to view progress</span>
+            <span className="text-[10px] text-slate-400">Click to view progress</span>
           </div>
 
           {inspectors.length === 0 ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-xs text-slate-500">
+            <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-xs text-slate-500 shadow-xs">
               No field inspectors found. Newly registered inspectors will appear here.
             </div>
           ) : (
@@ -222,51 +224,50 @@ export const AdminInspectors = () => {
                   <div
                     key={ins.id}
                     onClick={() => handleSelectInspector(ins.id)}
-                    className={`p-4 rounded-2xl border transition-all cursor-pointer relative ${
+                    className={`p-4 rounded-xl border transition-all cursor-pointer relative ${
                       isSelected
-                        ? 'bg-slate-900 border-teal-500/50 shadow-xl shadow-teal-500/5 ring-1 ring-teal-500/20'
-                        : 'bg-slate-900/60 border-slate-800/80 hover:border-slate-700 hover:bg-slate-900'
+                        ? 'bg-teal-50/50 border-teal-500 shadow-xs ring-1 ring-teal-500/30'
+                        : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/60 shadow-xs'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center space-x-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${
-                          isSelected ? 'bg-teal-500 text-slate-950 font-black' : 'bg-slate-800 text-teal-400 border border-slate-700'
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
+                          isSelected ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-700 border border-slate-200'
                         }`}>
                           {ins.full_name.substring(0, 2).toUpperCase()}
                         </div>
                         <div className="truncate">
-                          <h3 className="text-xs font-bold text-white truncate">{ins.full_name}</h3>
-                          <p className="text-[11px] text-teal-400 font-medium truncate">{ins.district}</p>
-                          <p className="text-[10px] text-slate-500 truncate">{ins.email}</p>
+                          <h3 className="text-xs font-bold text-slate-900 truncate">{ins.full_name}</h3>
+                          <p className="text-[11px] text-teal-700 font-medium truncate">{ins.district}</p>
+                          <p className="text-[10px] text-slate-400 truncate">{ins.email}</p>
                         </div>
                       </div>
 
                       <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold shrink-0 uppercase tracking-wider ${
                         ins.status === 'ACTIVE'
-                          ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                          : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                          : 'bg-amber-50 text-amber-800 border border-amber-200'
                       }`}>
                         {ins.status}
                       </span>
                     </div>
 
-                    {/* Progress preview footer on card */}
-                    <div className="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
-                      <div className="flex items-center space-x-1.5 text-slate-300">
-                        <Building2 className="w-3.5 h-3.5 text-slate-500" />
-                        <span className="font-semibold text-white">{ins.assigned_schools_count}</span>
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                      <div className="flex items-center space-x-1.5 text-slate-600">
+                        <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="font-semibold text-slate-900">{ins.assigned_schools_count}</span>
                         <span className="text-slate-500 text-[11px]">Schools</span>
                       </div>
 
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={(e) => openAssignModal(ins, e)}
-                          className="px-2.5 py-1 rounded-lg bg-teal-500/15 hover:bg-teal-500/25 text-teal-300 border border-teal-500/30 text-[10px] font-semibold transition-colors cursor-pointer"
+                          className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-50 text-teal-800 border border-slate-200 text-[10px] font-semibold transition-colors cursor-pointer shadow-xs"
                         >
                           Assign Schools
                         </button>
-                        <ChevronRight className={`w-4 h-4 ${isSelected ? 'text-teal-400' : 'text-slate-600'}`} />
+                        <ChevronRight className={`w-4 h-4 ${isSelected ? 'text-teal-700' : 'text-slate-400'}`} />
                       </div>
                     </div>
                   </div>
@@ -279,26 +280,26 @@ export const AdminInspectors = () => {
         {/* Right Column: Detailed Progress & Assigned Schools Monitor */}
         <div className="lg:col-span-8">
           {progressLoading ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-16 flex items-center justify-center min-h-[400px]">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-teal-500"></div>
+            <div className="bg-white border border-slate-200 rounded-xl p-16 flex items-center justify-center min-h-[400px] shadow-xs">
+              <div className="animate-spin rounded-full h-8 w-8 border-2 border-teal-600 border-t-transparent"></div>
             </div>
           ) : inspectorProgress ? (
             <div className="space-y-4">
               {/* Inspector Banner */}
-              <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-5 shadow-xl">
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-600 to-teal-400 flex items-center justify-center text-white font-black text-sm shadow-lg shadow-teal-500/20">
+                    <div className="w-11 h-11 rounded-xl bg-teal-600 flex items-center justify-center text-white font-bold text-sm shadow-xs">
                       <UserCheck className="w-6 h-6" />
                     </div>
                     <div>
                       <div className="flex items-center space-x-2.5">
-                        <h2 className="text-lg font-bold text-white">{inspectorProgress.inspector.full_name}</h2>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        <h2 className="text-lg font-bold text-slate-900">{inspectorProgress.inspector.full_name}</h2>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
                           {inspectorProgress.inspector.status}
                         </span>
                       </div>
-                      <p className="text-xs text-teal-400 font-medium">
+                      <p className="text-xs text-teal-700 font-medium">
                         {inspectorProgress.inspector.district} • Contact: {inspectorProgress.inspector.phone}
                       </p>
                     </div>
@@ -309,7 +310,7 @@ export const AdminInspectors = () => {
                       const ins = inspectors.find((i) => i.id === selectedInspectorId);
                       if (ins) openAssignModal(ins);
                     }}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 font-bold text-xs flex items-center space-x-1.5 shadow-md shadow-teal-500/20 hover:opacity-95 transition-opacity cursor-pointer shrink-0"
+                    className="px-4 py-2 rounded-lg bg-teal-600 text-white font-semibold text-xs flex items-center space-x-1.5 shadow-xs hover:bg-teal-700 transition-colors cursor-pointer shrink-0"
                   >
                     <Building2 className="w-4 h-4" />
                     <span>Manage Assigned Schools</span>
@@ -317,37 +318,37 @@ export const AdminInspectors = () => {
                 </div>
 
                 {/* Progress Bar & Summary Stats */}
-                <div className="mt-5 pt-4 border-t border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                  <div className="p-2.5 bg-slate-950/70 rounded-xl border border-slate-800/80">
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Total Assigned</span>
-                    <p className="text-lg font-black text-white mt-0.5">{inspectorProgress.stats.total_assigned_schools}</p>
+                <div className="mt-5 pt-4 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                  <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold">Total Assigned</span>
+                    <p className="text-lg font-bold text-slate-900 mt-0.5">{inspectorProgress.stats.total_assigned_schools}</p>
                   </div>
 
-                  <div className="p-2.5 bg-slate-950/70 rounded-xl border border-emerald-500/20">
-                    <span className="text-[10px] text-emerald-400 uppercase font-semibold">Verified Today</span>
-                    <p className="text-lg font-black text-emerald-400 mt-0.5">{inspectorProgress.stats.verified_today}</p>
+                  <div className="p-2.5 bg-emerald-50 rounded-lg border border-emerald-200">
+                    <span className="text-[10px] text-emerald-800 uppercase font-semibold">Verified Today</span>
+                    <p className="text-lg font-bold text-emerald-800 mt-0.5">{inspectorProgress.stats.verified_today}</p>
                   </div>
 
-                  <div className="p-2.5 bg-slate-950/70 rounded-xl border border-amber-500/20">
-                    <span className="text-[10px] text-amber-400 uppercase font-semibold">Pending Review</span>
-                    <p className="text-lg font-black text-amber-400 mt-0.5">{inspectorProgress.stats.pending_review}</p>
+                  <div className="p-2.5 bg-amber-50 rounded-lg border border-amber-200">
+                    <span className="text-[10px] text-amber-800 uppercase font-semibold">Pending Review</span>
+                    <p className="text-lg font-bold text-amber-800 mt-0.5">{inspectorProgress.stats.pending_review}</p>
                   </div>
 
-                  <div className="p-2.5 bg-slate-950/70 rounded-xl border border-slate-800">
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold">No Upload Today</span>
-                    <p className="text-lg font-black text-slate-400 mt-0.5">{inspectorProgress.stats.no_submission_today}</p>
+                  <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold">No Upload Today</span>
+                    <p className="text-lg font-bold text-slate-700 mt-0.5">{inspectorProgress.stats.no_submission_today}</p>
                   </div>
                 </div>
 
                 {/* Progress bar visual */}
                 <div className="mt-4">
                   <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-slate-400 text-[11px]">Today's Inspection Completion Rate</span>
-                    <span className="font-bold text-teal-400">{inspectorProgress.stats.compliance_percentage}%</span>
+                    <span className="text-slate-500 text-[11px]">Today's Inspection Completion Rate</span>
+                    <span className="font-bold text-teal-800">{inspectorProgress.stats.compliance_percentage}%</span>
                   </div>
-                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-teal-500 to-emerald-400 rounded-full transition-all duration-500"
+                      className="h-full bg-teal-600 rounded-full transition-all duration-500"
                       style={{ width: `${inspectorProgress.stats.compliance_percentage}%` }}
                     />
                   </div>
@@ -356,20 +357,20 @@ export const AdminInspectors = () => {
 
               {/* Schools List Header */}
               <div className="flex items-center justify-between pt-2">
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-                  <Building2 className="w-4 h-4 text-teal-400" />
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+                  <Building2 className="w-4 h-4 text-teal-600" />
                   <span>Assigned Schools & Real-Time Verification Status</span>
                 </h3>
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-slate-500">
                   {inspectorProgress.schools.length} school(s) under supervision
                 </span>
               </div>
 
               {/* Schools Cards */}
               {inspectorProgress.schools.length === 0 ? (
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center">
-                  <Building2 className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                  <h4 className="text-sm font-bold text-slate-300">No Schools Assigned Yet</h4>
+                <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-xs">
+                  <Building2 className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                  <h4 className="text-sm font-bold text-slate-800">No Schools Assigned Yet</h4>
                   <p className="text-xs text-slate-500 mt-1">
                     Click "Manage Assigned Schools" above to assign government schools to this inspector.
                   </p>
@@ -377,31 +378,36 @@ export const AdminInspectors = () => {
               ) : (
                 <div className="space-y-3">
                   {inspectorProgress.schools.map((s) => {
-                    // Status Badge config
                     let statusBadge = (
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
-                        NO SUBMISSION TODAY
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                        {s.latest_past_image ? 'PRIOR SUBMISSIONS ON FILE' : 'NO SUBMISSIONS YET'}
                       </span>
                     );
                     if (s.verification_status === 'VERIFIED') {
                       statusBadge = (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center space-x-1">
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center space-x-1">
                           <CheckCircle2 className="w-3 h-3 shrink-0" />
                           <span>VERIFIED BY INSPECTOR</span>
                         </span>
                       );
-                    } else if (s.verification_status === 'PENDING_REVIEW') {
+                    } else if (['PENDING_REVIEW', 'CV_PASS'].includes(s.verification_status)) {
                       statusBadge = (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center space-x-1">
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center space-x-1">
                           <Clock className="w-3 h-3 shrink-0" />
                           <span>AWAITING VERIFICATION</span>
                         </span>
                       );
-                    } else if (s.verification_status === 'FLAGGED') {
+                    } else if (['FLAGGED', 'CV_FLAG'].includes(s.verification_status)) {
                       statusBadge = (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30 flex items-center space-x-1">
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200 flex items-center space-x-1">
                           <AlertTriangle className="w-3 h-3 shrink-0" />
                           <span>FLAGGED FOR ATTENTION</span>
+                        </span>
+                      );
+                    } else if (s.verification_status === 'REJECTED') {
+                      statusBadge = (
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200">
+                          REJECTED
                         </span>
                       );
                     }
@@ -409,18 +415,18 @@ export const AdminInspectors = () => {
                     return (
                       <div
                         key={s.school_id}
-                        className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4 hover:border-slate-700 transition-colors"
+                        className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4 hover:border-slate-300 transition-colors"
                       >
                         {/* School Top Info */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                           <div>
                             <div className="flex items-center space-x-2">
-                              <h4 className="text-sm font-bold text-white">{s.school_name}</h4>
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-slate-800 text-slate-300 border border-slate-700">
+                              <h4 className="text-sm font-bold text-slate-900">{s.school_name}</h4>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-slate-100 text-slate-600 border border-slate-200">
                                 {s.school_code}
                               </span>
                             </div>
-                            <p className="text-[11px] text-slate-400 mt-0.5">
+                            <p className="text-[11px] text-slate-500 mt-0.5">
                               {s.district} • Principal: {s.principal_name} ({s.phone})
                             </p>
                           </div>
@@ -429,8 +435,8 @@ export const AdminInspectors = () => {
                             {statusBadge}
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
                               s.hardware_status === 'CONNECTED'
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                : 'bg-slate-100 text-slate-600 border border-slate-200'
                             }`}>
                               {s.hardware_label}
                             </span>
@@ -440,28 +446,28 @@ export const AdminInspectors = () => {
                         {/* Telemetry and Verification Details */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                           {/* Physical Water & Tank Telemetry */}
-                          <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 space-y-2">
-                            <span className="text-[11px] font-semibold text-slate-400 flex items-center space-x-1.5">
-                              <Droplets className="w-3.5 h-3.5 text-cyan-400" />
+                          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+                            <span className="text-[11px] font-semibold text-slate-700 flex items-center space-x-1.5">
+                              <Droplets className="w-3.5 h-3.5 text-teal-600" />
                               <span>Overhead Tank & Drinking Water</span>
                             </span>
                             {s.latest_reading?.water_level_pct !== null && s.latest_reading?.water_level_pct !== undefined ? (
                               <div className="space-y-1.5 pt-1">
                                 <div className="flex justify-between text-xs">
-                                  <span className="text-slate-400">Fill Level:</span>
-                                  <span className="font-bold text-white">
+                                  <span className="text-slate-500">Fill Level:</span>
+                                  <span className="font-bold text-slate-900">
                                     {s.latest_reading.water_level_pct}% ({s.latest_reading.water_volume_litres} L)
                                   </span>
                                 </div>
-                                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
                                   <div
-                                    className="h-full bg-cyan-500 rounded-full"
+                                    className="h-full bg-teal-600 rounded-full"
                                     style={{ width: `${Math.min(100, s.latest_reading.water_level_pct)}%` }}
                                   />
                                 </div>
                                 <div className="flex justify-between text-xs pt-1">
-                                  <span className="text-slate-400">Turbidity:</span>
-                                  <span className={`font-semibold ${s.latest_reading.turbidity_ntu <= 5.0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                  <span className="text-slate-500">Turbidity:</span>
+                                  <span className={`font-semibold ${s.latest_reading.turbidity_ntu <= 5.0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                                     {s.latest_reading.turbidity_ntu} NTU ({s.latest_reading.turbidity_ntu <= 5.0 ? 'Safe' : 'Abnormal'})
                                   </span>
                                 </div>
@@ -472,15 +478,15 @@ export const AdminInspectors = () => {
                           </div>
 
                           {/* Mid-Day Meal Compliance */}
-                          <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 space-y-2">
-                            <span className="text-[11px] font-semibold text-slate-400 flex items-center space-x-1.5">
-                              <UtensilsCrossed className="w-3.5 h-3.5 text-amber-400" />
+                          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+                            <span className="text-[11px] font-semibold text-slate-700 flex items-center space-x-1.5">
+                              <UtensilsCrossed className="w-3.5 h-3.5 text-teal-600" />
                               <span>Mid-Day Meal & Kitchen Audit</span>
                             </span>
 
                             {s.verified_by ? (
                               <div className="space-y-1 text-xs pt-1">
-                                <p className="text-slate-300">
+                                <p className="text-slate-700">
                                   <span className="text-slate-500">Reviewer:</span> {s.verified_by}
                                 </p>
                                 {s.verified_at && (
@@ -489,13 +495,13 @@ export const AdminInspectors = () => {
                                   </p>
                                 )}
                                 {s.verification_notes && (
-                                  <p className="text-[11px] text-teal-300 italic">
+                                  <p className="text-[11px] text-teal-800 italic">
                                     "{s.verification_notes}"
                                   </p>
                                 )}
                               </div>
                             ) : s.today_has_submission ? (
-                              <p className="text-[11px] text-amber-300 pt-1">
+                              <p className="text-[11px] text-amber-800 pt-1">
                                 Staff submitted {s.today_images_count} meal photograph(s) today. Pending inspector review.
                               </p>
                             ) : (
@@ -509,26 +515,49 @@ export const AdminInspectors = () => {
                         {/* Today's Photo Submissions Preview */}
                         {s.today_images && s.today_images.length > 0 && (
                           <div className="pt-1">
-                            <span className="text-[11px] font-semibold text-slate-400 block mb-2">
+                            <span className="text-[11px] font-semibold text-slate-600 block mb-2">
                               Today's Uploaded Photographs ({s.today_images.length})
                             </span>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                               {s.today_images.map((img) => (
-                                <div key={img.id} className="group relative rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
+                                <div key={img.id} className="group relative rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
                                   <img
                                     src={getImageUrl(img.image_url)}
                                     alt={img.meal_type || 'Meal'}
                                     onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMAGE; }}
                                     className="w-full h-24 object-cover group-hover:scale-105 transition-transform duration-200"
                                   />
-                                  <div className="p-1.5 bg-slate-900/90 text-[10px]">
-                                    <p className="font-semibold text-white truncate">{img.meal_type || img.category}</p>
+                                  <div className="p-1.5 bg-white text-[10px] border-t border-slate-100">
+                                    <p className="font-semibold text-slate-900 truncate">{img.meal_type || img.category}</p>
                                     {img.cv_student_count !== null && img.cv_student_count !== undefined && (
-                                      <p className="text-teal-400 font-mono text-[9px]">Students: ~{img.cv_student_count}</p>
+                                      <p className="text-teal-700 font-mono text-[9px]">Students: {img.cv_student_count}</p>
                                     )}
                                   </div>
                                 </div>
                               ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Recent Submission on File Preview (if no upload today) */}
+                        {(!s.today_images || s.today_images.length === 0) && s.latest_past_image && (
+                          <div className="pt-1">
+                            <span className="text-[11px] font-semibold text-slate-600 block mb-2">
+                              Recent Submission on File ({new Date(s.latest_past_image.created_at).toLocaleDateString()})
+                            </span>
+                            <div className="max-w-[200px] group relative rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
+                              <img
+                                src={getImageUrl(s.latest_past_image.image_url)}
+                                alt={s.latest_past_image.meal_type || 'Meal'}
+                                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMAGE; }}
+                                className="w-full h-24 object-cover"
+                              />
+                              <div className="p-1.5 bg-white text-[10px] border-t border-slate-100">
+                                <p className="font-semibold text-slate-900 truncate">{s.latest_past_image.meal_type || s.latest_past_image.category || 'Meal Photo'}</p>
+                                {s.latest_past_image.cv_student_count !== null && s.latest_past_image.cv_student_count !== undefined && (
+                                  <p className="text-teal-700 font-mono text-[9px]">Students: {s.latest_past_image.cv_student_count}</p>
+                                )}
+                              </div>
                             </div>
                           </div>
                         )}
@@ -539,7 +568,7 @@ export const AdminInspectors = () => {
               )}
             </div>
           ) : (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-16 text-center text-slate-400">
+            <div className="bg-white border border-slate-200 rounded-xl p-16 text-center text-slate-500 shadow-xs">
               Select an inspector from the left to view monitored schools and verification progress.
             </div>
           )}
@@ -548,60 +577,80 @@ export const AdminInspectors = () => {
 
       {/* ASSIGN SCHOOLS MODAL */}
       {isAssignModalOpen && assigningInspector && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-xl max-w-lg w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
-                <h3 className="text-base font-bold text-white">Assign Government Schools</h3>
-                <p className="text-xs text-teal-400 font-medium">
+                <h3 className="text-base font-bold text-slate-900">Assign Government Schools</h3>
+                <p className="text-xs text-teal-700 font-medium">
                   Field Inspector: {assigningInspector.full_name}
                 </p>
               </div>
               <button
                 onClick={() => setIsAssignModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-400">
-              Select the schools that this inspector will be responsible for monitoring and verifying:
-            </p>
-
-            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
-              {availableSchools.map((school) => {
-                const isChecked = selectedSchoolIds.includes(school.id);
-                return (
-                  <div
-                    key={school.id}
-                    onClick={() => toggleSchoolSelection(school.id)}
-                    className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
-                      isChecked
-                        ? 'bg-teal-500/15 border-teal-500/40 text-white'
-                        : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
-                    }`}
-                  >
-                    <div>
-                      <p className="text-xs font-bold">{school.name}</p>
-                      <p className="text-[10px] text-slate-400">
-                        {school.school_code} • {school.district}
-                      </p>
-                    </div>
-
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => {}}
-                      className="w-4 h-4 text-teal-500 rounded border-slate-700 focus:ring-0 focus:ring-offset-0 bg-slate-900"
-                    />
-                  </div>
+            {(() => {
+              const eligibleSchools = availableSchools.filter((school) => {
+                const otherInspectors = (school.assigned_inspectors || []).filter(
+                  (ins) => ins.id !== assigningInspector.id
                 );
-              })}
-            </div>
+                return otherInspectors.length === 0;
+              });
 
-            <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
-              <span className="text-xs text-slate-400">
+              return (
+                <>
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>Select schools for this inspector's jurisdiction:</span>
+                    <span className="text-[11px] text-teal-700 font-medium">1 Inspector per School</span>
+                  </div>
+
+                  <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                    {eligibleSchools.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500 text-xs bg-slate-50 border border-slate-200 rounded-lg">
+                        No unassigned schools available. All active schools are already assigned to other inspectors.
+                      </div>
+                    ) : (
+                      eligibleSchools.map((school) => {
+                        const isChecked = selectedSchoolIds.includes(school.id);
+                        return (
+                          <div
+                            key={school.id}
+                            onClick={() => toggleSchoolSelection(school.id)}
+                            className={`p-3 rounded-lg border flex items-center justify-between cursor-pointer transition-colors ${
+                              isChecked
+                                ? 'bg-teal-50 border-teal-500 text-teal-900'
+                                : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                            }`}
+                          >
+                            <div>
+                              <p className="text-xs font-semibold">{school.name}</p>
+                              <p className="text-[10px] text-slate-500">
+                                {school.school_code} • {school.district}
+                              </p>
+                            </div>
+
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {}}
+                              className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-0 focus:ring-offset-0 pointer-events-none"
+                            />
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </>
+              );
+            })()}
+
+            <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
+              <span className="text-xs text-slate-500">
                 {selectedSchoolIds.length} school(s) selected
               </span>
 
@@ -609,7 +658,7 @@ export const AdminInspectors = () => {
                 <button
                   type="button"
                   onClick={() => setIsAssignModalOpen(false)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800"
+                  className="px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200"
                 >
                   Cancel
                 </button>
@@ -617,7 +666,7 @@ export const AdminInspectors = () => {
                   type="button"
                   disabled={assignLoading}
                   onClick={handleSaveAssignments}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-teal-500 to-emerald-500 text-slate-950 hover:opacity-90 disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50 shadow-xs"
                 >
                   {assignLoading ? 'Saving...' : 'Save Assignments'}
                 </button>

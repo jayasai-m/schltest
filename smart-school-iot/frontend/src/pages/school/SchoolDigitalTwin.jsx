@@ -29,17 +29,17 @@ export const SchoolDigitalTwin = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-teal-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-teal-600 border-t-transparent"></div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Water Tank Digital Twin</h1>
-          <p className="text-xs text-slate-400 mt-1">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Water Tank Digital Twin</h1>
+          <p className="text-xs text-slate-500 mt-1">
             Real-time cyber-physical model of your institution's drinking water storage tank
           </p>
         </div>
@@ -47,13 +47,12 @@ export const SchoolDigitalTwin = () => {
         <button
           onClick={() => { setRefreshing(true); fetchTwin(); }}
           disabled={refreshing}
-          className="p-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white"
+          className="p-2 bg-white border border-slate-200 rounded-lg text-slate-500 hover:text-slate-900 shadow-xs"
         >
-          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-teal-400' : ''}`} />
+          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-teal-600' : ''}`} />
         </button>
       </div>
 
-      {/* Strictly isolated tank digital twin (NO school selector) */}
       <WaterTankDigitalTwin
         schoolName={data?.school_name}
         tankCapacity={data?.tank_capacity_litres}

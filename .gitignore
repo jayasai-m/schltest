@@ -22,6 +22,9 @@ __pycache__/
 # Uploads and temporary files
 uploads/*
 !uploads/.gitkeep
+**/uploads/*
+!**/uploads/.gitkeep
+*.pt
 
 # IDEs
 .vscode/

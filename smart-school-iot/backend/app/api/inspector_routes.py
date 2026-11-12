@@ -82,15 +82,21 @@ def get_inspector_dashboard(
             SensorReading.school_id == s.id
         ).order_by(SensorReading.recorded_at.desc()).first()
         
-        # Check today's verification status
+        # Check today's verification status with latest image fallback
         today_img = db.query(ImageSubmission).filter(
             ImageSubmission.school_id == s.id,
             ImageSubmission.created_at >= today_start
         ).order_by(ImageSubmission.created_at.desc()).first()
         
-        ver_status = "NO_SUBMISSION"
+        latest_img = None
+        has_today = bool(today_img)
         if today_img:
             ver_status = today_img.status
+        else:
+            latest_img = db.query(ImageSubmission).filter(
+                ImageSubmission.school_id == s.id
+            ).order_by(ImageSubmission.created_at.desc()).first()
+            ver_status = latest_img.status if latest_img else "NO_SUBMISSION"
             
         schools_overview.append({
             "id": s.id,
@@ -163,6 +169,14 @@ def get_inspector_schools(
             ImageSubmission.created_at >= today_start
         ).order_by(ImageSubmission.created_at.desc()).first()
         
+        latest_img = None
+        if not today_img:
+            latest_img = db.query(ImageSubmission).filter(
+                ImageSubmission.school_id == s.id
+            ).order_by(ImageSubmission.created_at.desc()).first()
+            
+        ver_today = today_img.status if today_img else (latest_img.status if latest_img else "NO_SUBMISSION")
+        
         result.append({
             "id": s.id,
             "name": s.name,
@@ -176,7 +190,8 @@ def get_inspector_schools(
             "last_hardware_ping": s.last_hardware_ping,
             "active_alerts_count": active_alerts_cnt,
             "latest_reading": latest_reading,
-            "verification_status_today": today_img.status if today_img else "NO_SUBMISSION"
+            "verification_status_today": ver_today,
+            "has_today_upload": bool(today_img)
         })
     return result
 

@@ -83,7 +83,7 @@ class TelemetryIngest(BaseModel):
     distance_cm: Optional[float] = None
     turbidity_ntu: float
     turbidity_voltage: Optional[float] = None
-    humidity_pct: float
+    humidity_pct: Optional[float] = None
     temperature_c: Optional[float] = None # Physical sensor reading only, else None
 
 class TelemetryResponse(BaseModel):
@@ -225,3 +225,40 @@ class InspectorApprovalAction(BaseModel):
 
 class AssignSchoolsRequest(BaseModel):
     school_ids: List[int]
+
+# ----------------- Message & Mail Notification Schemas -----------------
+
+class MessageSendRequest(BaseModel):
+    recipient_role: str = Field(..., description="ADMIN, SCHOOL, or INSPECTOR")
+    recipient_user_id: Optional[int] = None
+    recipient_school_id: Optional[int] = None
+    recipient_email: Optional[str] = None
+    subject: str = Field(..., min_length=2, max_length=255)
+    content: str = Field(..., min_length=2)
+    priority: Optional[str] = "NORMAL" # NORMAL, URGENT, NOTICE
+    send_email: Optional[bool] = True
+
+class MessageResponse(BaseModel):
+    id: int
+    sender_id: Optional[int] = None
+    sender_role: str
+    sender_name: str
+    sender_email: str
+    sender_school_id: Optional[int] = None
+    sender_school_name: Optional[str] = None
+    recipient_role: str
+    recipient_user_id: Optional[int] = None
+    recipient_school_id: Optional[int] = None
+    recipient_name: str
+    recipient_email: str
+    subject: str
+    content: str
+    priority: str
+    is_read: bool
+    email_sent: bool
+    email_error: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
