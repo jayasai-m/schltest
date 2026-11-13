@@ -165,7 +165,7 @@ void readSensors() {
 // ------------------------------------------------------------
 void sendTelemetryToServer() {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.printf("[WiFi DISCONNECTED] Unable to push to server. Waiting for WiFi (%s)...\n", WIFI_SSID);
+    Serial.printf("[WiFi DISCONNECTED] Waiting for hotspot '%s'. Tip: Set phone hotspot AP Band to 2.4 GHz (ESP32 does not support 5 GHz)!\n", WIFI_SSID);
     return;
   }
 
@@ -342,9 +342,11 @@ void loop() {
   // Auto-reconnect WiFi if connection drops (retries every 8 seconds non-blocking)
   if (WiFi.status() != WL_CONNECTED && (millis() - lastWifiRetry >= 8000)) {
     lastWifiRetry = millis();
-    Serial.printf(">> [WiFi] Reconnecting to %s...\n", WIFI_SSID);
-    WiFi.disconnect();
-    WiFi.reconnect();
+    Serial.printf(">> [WiFi] Retrying connection to %s (2.4 GHz)...\n", WIFI_SSID);
+    WiFi.disconnect(true);
+    delay(50);
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   }
 
   if (millis() - previousRead >= interval) {
