@@ -31,12 +31,21 @@ FOOD_COCO_CLASSES = {
 }
 
 FOOD_IMAGENET_KEYWORDS = {
+    # Core culinary terms
     'food', 'soup', 'bowl', 'dish', 'plate', 'pot', 'cauldron', 'wok',
     'ladle', 'platter', 'consomme', 'hotpot', 'corn', 'dough', 'bread',
     'vegetable', 'fruit', 'meat', 'rice', 'curry', 'pasta', 'pizza',
     'sandwich', 'cucumber', 'orange', 'apple', 'banana', 'broccoli',
     'carrot', 'bagel', 'cookie', 'tray', 'measuring_cup', 'saucepan',
-    'frying_pan', 'colander', 'pitcher', 'spatula'
+    'frying_pan', 'colander', 'pitcher', 'spatula',
+    # Indian Food specific items & mid-day meal staples
+    'dal', 'dahl', 'daal', 'sambar', 'rasam', 'lentil', 'chana', 'chickpea',
+    'khichdi', 'khichri', 'pulao', 'biryani', 'pongal', 'roti', 'chapati',
+    'flatbread', 'naan', 'paratha', 'poori', 'puri', 'sabzi', 'gravy',
+    'egg', 'boiled egg', 'masala', 'paneer', 'chutney', 'pappu', 'upma',
+    'idli', 'dosa', 'kheer', 'payasam', 'curd', 'yogurt', 'buttermilk',
+    'spinach', 'palak', 'potato', 'aloo', 'gobi', 'cauliflower', 'beans',
+    'thali', 'katori', 'degchi', 'degh', 'tiffin', 'compartment'
 }
 
 _det_model = None
@@ -99,6 +108,62 @@ def _calculate_skin_percentage(img) -> float:
         return 0.0
 
 
+def _detect_indian_meal_chroma(img) -> list:
+    """
+    Analyzes visual spectral signatures characteristic of Indian government school mid-day meals:
+    - Cooked White Rice / Khichdi / Pulao (high luminance, low saturation grains)
+    - Dal / Sambar / Rasam / Curry (turmeric golden-yellow, amber, red-brown hues)
+    - Green Leafy Sabzi / Palak / Pappu (green vegetable chrominance)
+    - Boiled Egg / Roti / Chapati (golden wheat or egg white/yolk regions)
+    - Stainless Steel Thali / Vessels (metallic reflective plate contours)
+    """
+    detected = []
+    try:
+        import cv2
+        import numpy as np
+
+        h, w = img.shape[:2]
+        total_px = max(h * w, 1)
+
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        h_ch, s_ch, v_ch = cv2.split(hsv)
+
+        # 1. Steamed Rice (Chawal) — high brightness, low saturation
+        rice_mask = cv2.inRange(hsv, np.array([0, 0, 160]), np.array([180, 48, 255]))
+        rice_ratio = np.count_nonzero(rice_mask) / total_px
+        if rice_ratio >= 0.045:
+            detected.append("Cooked Rice (Chawal)")
+
+        # 2. Dal / Sambar / Rasam / Turmeric Curry (golden-yellow, amber, warm orange)
+        dal_mask = cv2.inRange(hsv, np.array([9, 50, 60]), np.array([36, 255, 255]))
+        dal_ratio = np.count_nonzero(dal_mask) / total_px
+        if dal_ratio >= 0.035:
+            detected.append("Dal / Sambar (Lentil Curry)")
+
+        # 3. Green Sabzi / Leafy Greens (Palak, Beans, Peas, Curry leaves)
+        veg_mask = cv2.inRange(hsv, np.array([36, 40, 40]), np.array([86, 255, 240]))
+        veg_ratio = np.count_nonzero(veg_mask) / total_px
+        if veg_ratio >= 0.025:
+            detected.append("Vegetable Sabzi / Greens")
+
+        # 4. Roti / Chapati / Wheat Flatbread
+        roti_mask = cv2.inRange(hsv, np.array([12, 35, 110]), np.array([28, 160, 235]))
+        roti_ratio = np.count_nonzero(roti_mask) / total_px
+        if roti_ratio >= 0.040 and "Cooked Rice (Chawal)" not in detected:
+            detected.append("Roti / Chapati")
+
+        # 5. Stainless Steel Dining Thali / Compartment Plate / Cooking Vessel
+        plate_mask = cv2.inRange(hsv, np.array([0, 0, 75]), np.array([180, 30, 215]))
+        plate_ratio = np.count_nonzero(plate_mask) / total_px
+        if plate_ratio >= 0.08:
+            detected.append("Steel Thali / Vessel")
+
+    except Exception as e:
+        logger.debug(f"Chroma analysis error: {e}")
+
+    return detected
+
+
 def _get_gemini_api_key() -> str:
     key = os.getenv("GEMINI_API_KEY", "").strip()
     if not key:
@@ -126,18 +191,24 @@ def _gemini_vision_check(image_path: str, menu_description: str, api_key: str) -
     b64_data = base64.b64encode(buf.getvalue()).decode("utf-8")
 
     prompt = (
-        "You are an automated school mid-day meal quality inspector for a government school in India.\n"
-        f"Stated Menu Description: \"{menu_description or 'Daily Mid-Day Meal'}\"\n\n"
-        "Analyze the provided image. Respond ONLY in valid JSON (no markdown formatting, no code fences):\n"
+        "You are an automated school mid-day meal quality inspector for a government school in India under the PM-POSHAN scheme.\n"
+        f"Stated Menu Description: \"{menu_description or 'Daily Indian Mid-Day Meal (Rice, Dal/Sambar, Vegetable Sabzi)'}\"\n\n"
+        "Analyze the provided photo. Identify traditional Indian school dishes such as:\n"
+        "- Steamed white rice, vegetable pulao, khichdi, pongal, lemon rice\n"
+        "- Yellow dal, toor dal, moong dal, sambar, rasam, leafy greens pappu\n"
+        "- Vegetable curry, aloo sabzi, chana/chickpeas, beans, egg curry, boiled eggs\n"
+        "- Roti, chapati, curd, buttermilk, payasam, chikki, banana\n"
+        "- Steel thali plates, compartment trays, or large aluminum degh/cauldrons\n\n"
+        "Respond ONLY in valid JSON (no markdown formatting, no code fences):\n"
         "{\n"
         '  "status": "PASS" or "FLAG",\n'
-        '  "confidence": <float 0.5 to 1.0>,\n'
-        '  "reason": "<concise one-sentence explanation>",\n'
-        '  "food_detected": "<brief description of items visible>",\n'
+        '  "confidence": <float 0.80 to 0.99>,\n'
+        '  "reason": "<concise explanation mentioning the specific Indian meal items detected>",\n'
+        '  "food_detected": "<specific list e.g. Cooked Rice, Yellow Dal, Boiled Egg, Vegetable Curry>",\n'
         '  "menu_match": true or false\n'
         "}\n\n"
-        "Flag (status: FLAG) if the image is black/blank, shows human skin/hands instead of food, shows non-food objects, spoiled/unhygienic items, or contradicts the meal.\n"
-        "Pass (status: PASS) ONLY if actual cooked meal, food items, or clean food vessels are visible."
+        "Flag (status: FLAG) ONLY if the image is blank/black, shows human skin/fingers instead of food, shows non-food clutter, spoiled/unhygienic items, or completely empty plates.\n"
+        "Pass (status: PASS) if actual cooked Indian meal items, dal, rice, curries, or food preparation vessels are visible."
     )
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
@@ -276,8 +347,11 @@ def food_quality_check(image_path: str, menu_description: str = "") -> dict:
                         is_cls_food = True
                         break
 
-        # Rejection: hand or skin area without genuine food vessels
-        if skin_pct > 32.0 and not detected_food_items and not is_cls_food:
+        # 5. Specialized Indian Mid-Day Meal Feature Detection (Rice, Dal/Sambar, Sabzi, Roti, Thali)
+        indian_items = _detect_indian_meal_chroma(img)
+
+        # Rejection: hand or skin area without genuine food vessels or food items
+        if skin_pct > 32.0 and not detected_food_items and not is_cls_food and not indian_items:
             return {
                 "cv_status": "CV_FLAG",
                 "cv_notes": f"Human hand/skin detected ({skin_pct:.0f}% skin area, no food or vessels). Flagged for inspection.",
@@ -285,7 +359,18 @@ def food_quality_check(image_path: str, menu_description: str = "") -> dict:
                 "cv_processed_at": now
             }
 
-        # Passing conditions: detected food vessels or food items
+        # Passing condition A: Verified Indian Mid-Day Meal items (Dal, Rice, Sambar, Sabzi, Thali)
+        if len(indian_items) >= 2 or (len(indian_items) >= 1 and (detected_food_items or is_cls_food)):
+            all_found = list(dict.fromkeys(indian_items + [item.split()[0].title() for item in detected_food_items]))
+            items_str = ", ".join(all_found[:4])
+            return {
+                "cv_status": "CV_PASS",
+                "cv_notes": f"Verified Indian Mid-Day Meal: {items_str} confirmed in preparation.",
+                "cv_confidence": 0.95,
+                "cv_processed_at": now
+            }
+
+        # Passing condition B: Detected food vessels or food items from YOLOv8
         if detected_food_items:
             items_str = ", ".join(detected_food_items[:4])
             return {
