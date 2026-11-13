@@ -36,6 +36,8 @@ export const AdminSchoolDetails = () => {
 
   useEffect(() => {
     fetchDetails();
+    const timer = setInterval(fetchDetails, 5000);
+    return () => clearInterval(timer);
   }, [schoolId]);
 
   if (loading) {

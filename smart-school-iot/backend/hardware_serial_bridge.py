@@ -30,7 +30,9 @@ logger = logging.getLogger("serial_bridge")
 
 import os
 
-SERVER_URL = os.getenv("HARDWARE_SERVER_URL", "http://127.0.0.1:8000/api/hardware/telemetry")
+LOCAL_SERVER = os.getenv("HARDWARE_SERVER_URL", "http://127.0.0.1:8000/api/hardware/telemetry")
+CLOUD_SERVER = "https://smart-school-iot.vercel.app/api/hardware/telemetry"
+TARGET_URLS = [LOCAL_SERVER, CLOUD_SERVER] if LOCAL_SERVER != CLOUD_SERVER else [LOCAL_SERVER]
 SCHOOL_ID = 1
 API_KEY = "esp32_penamaluru_hw_key_2026"
 DEVICE_ID = "ESP32-PENAMALURU-01"
@@ -148,18 +150,18 @@ def main():
                         "temperature_c": current_readings["temperature_c"]
                     }
 
-                    try:
-                        resp = requests.post(SERVER_URL, json=payload, timeout=3)
-                        if resp.status_code == 200:
-                            current_readings["last_post_time"] = now
-                            logger.info(
-                                f"[TELEMETRY POST] Turbidity: {payload['turbidity_ntu']} NTU ({payload['turbidity_voltage']}V) | "
-                                f"Temp: {payload['temperature_c']} C | Humidity: {payload['humidity_pct']}% -> Status 200 OK"
-                            )
-                        else:
-                            logger.warning(f"Server responded with HTTP {resp.status_code}: {resp.text[:100]}")
-                    except Exception as req_err:
-                        logger.warning(f"Failed to post to backend server: {req_err}")
+                    for target_url in TARGET_URLS:
+                        try:
+                            resp = requests.post(target_url, json=payload, timeout=3)
+                            if resp.status_code == 200:
+                                current_readings["last_post_time"] = now
+                                label = "Local" if "127.0.0.1" in target_url else "Cloud"
+                                logger.info(
+                                    f"[{label} POST] Turbidity: {payload['turbidity_ntu']} NTU ({payload['turbidity_voltage']}V) | "
+                                    f"Temp: {payload['temperature_c']} C | Humidity: {payload['humidity_pct']}% -> Status 200 OK"
+                                )
+                        except Exception:
+                            pass
 
         except serial.SerialException as se:
             logger.warning(f"Serial port {port} error or locked: {se}. Retrying in 3 seconds...")

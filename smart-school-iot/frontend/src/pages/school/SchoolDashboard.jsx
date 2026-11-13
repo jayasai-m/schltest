@@ -48,7 +48,7 @@ export const SchoolDashboard = () => {
 
   const { school, hardware, latest_reading, active_alerts_count, recent_alerts, today_meal } = data || {};
   const isConnected = hardware?.status === 'CONNECTED';
-  const hasSensorData = isConnected && latest_reading !== null && latest_reading !== undefined;
+  const hasSensorData = latest_reading !== null && latest_reading !== undefined;
 
   return (
     <div className="space-y-6">
@@ -125,7 +125,7 @@ export const SchoolDashboard = () => {
           <p className="text-[11px] mt-1 font-semibold">
             {hasSensorData ? (
               <span className={latest_reading.turbidity_status === 'GOOD' ? 'text-emerald-700' : 'text-rose-700'}>
-                Quality: {latest_reading.turbidity_status}
+                Quality: {latest_reading.turbidity_status} {!isConnected && '(Offline)'}
               </span>
             ) : (
               <span className="text-slate-400">{t('sensorOffline')}</span>
