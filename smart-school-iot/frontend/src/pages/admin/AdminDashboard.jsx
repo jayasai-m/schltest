@@ -34,7 +34,7 @@ export const AdminDashboard = () => {
 
   useEffect(() => {
     fetchDashboard();
-    const interval = setInterval(fetchDashboard, 10000);
+    const interval = setInterval(fetchDashboard, 4000);
     return () => clearInterval(interval);
   }, []);
 

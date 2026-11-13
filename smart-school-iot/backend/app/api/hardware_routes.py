@@ -9,7 +9,7 @@ from ..services.threshold_service import process_sensor_telemetry
 
 router = APIRouter(prefix="/api/hardware", tags=["Hardware Telemetry"])
 
-HARDWARE_TIMEOUT_SECONDS = int(os.getenv("HARDWARE_TIMEOUT_SECONDS", "60"))
+HARDWARE_TIMEOUT_SECONDS = int(os.getenv("HARDWARE_TIMEOUT_SECONDS", "120"))
 
 @router.post("/telemetry", response_model=TelemetryResponse)
 def receive_telemetry(data: TelemetryIngest, db: Session = Depends(get_db)):

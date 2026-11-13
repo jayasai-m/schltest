@@ -359,8 +359,9 @@ def food_quality_check(image_path: str, menu_description: str = "") -> dict:
                 "cv_processed_at": now
             }
 
-        # Passing condition A: Verified Indian Mid-Day Meal items (Dal, Rice, Sambar, Sabzi, Thali)
-        if len(indian_items) >= 2 or (len(indian_items) >= 1 and (detected_food_items or is_cls_food)):
+        # Passing condition A: Verified Indian Mid-Day Meal items (Dal, Rice, Sambar, Sabzi, Roti, Thali)
+        food_only_items = [it for it in indian_items if it != "Steel Thali / Vessel"]
+        if len(food_only_items) >= 1 or len(indian_items) >= 2 or (len(indian_items) >= 1 and (detected_food_items or is_cls_food)):
             all_found = list(dict.fromkeys(indian_items + [item.split()[0].title() for item in detected_food_items]))
             items_str = ", ".join(all_found[:4])
             return {

@@ -34,7 +34,7 @@ export const SchoolDashboard = () => {
 
   useEffect(() => {
     fetchDashboard();
-    const interval = setInterval(fetchDashboard, 8000);
+    const interval = setInterval(fetchDashboard, 4000);
     return () => clearInterval(interval);
   }, []);
 

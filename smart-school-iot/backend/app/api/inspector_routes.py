@@ -15,7 +15,7 @@ from ..services.audit_service import log_audit
 
 router = APIRouter(prefix="/api/inspector", tags=["Field Inspector Portal"])
 
-HARDWARE_TIMEOUT_SECONDS = int(os.getenv("HARDWARE_TIMEOUT_SECONDS", "60"))
+HARDWARE_TIMEOUT_SECONDS = int(os.getenv("HARDWARE_TIMEOUT_SECONDS", "120"))
 
 def evaluate_hardware(school: School) -> dict:
     if not school.last_hardware_ping:

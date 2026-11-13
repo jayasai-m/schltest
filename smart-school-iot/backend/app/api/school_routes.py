@@ -22,7 +22,7 @@ from ..services.cv_service import food_quality_check, count_students_in_image
 
 router = APIRouter(prefix="/api/school", tags=["School Panel"])
 
-HARDWARE_TIMEOUT_SECONDS = int(os.getenv("HARDWARE_TIMEOUT_SECONDS", "60"))
+HARDWARE_TIMEOUT_SECONDS = int(os.getenv("HARDWARE_TIMEOUT_SECONDS", "120"))
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
 
 def get_live_hardware_status(school: School) -> dict:
