@@ -118,6 +118,7 @@ def _detect_indian_meal_chroma(img) -> list:
     - Chana / Chickpeas / Legumes (golden-brown spherical granules)
     - Roti / Chapati (golden wheat or flatbread regions)
     - Stainless Steel Thali / Vessels (metallic reflective plate contours)
+    NOTE: Human skin pixels are explicitly subtracted to prevent hands/fingers from falsely matching food!
     """
     detected = []
     try:
@@ -127,62 +128,69 @@ def _detect_indian_meal_chroma(img) -> list:
         h, w = img.shape[:2]
         total_px = max(h * w, 1)
 
+        # 0. Mask out human skin tones so skin never matches food
+        ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+        skin_mask = cv2.inRange(ycrcb, np.array([0, 133, 77]), np.array([255, 173, 127]))
+        not_skin = cv2.bitwise_not(skin_mask)
+
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         h_ch, s_ch, v_ch = cv2.split(hsv)
 
-        # 1. Steamed Rice (Chawal / Anna) — high brightness, low saturation
-        rice_mask = cv2.inRange(hsv, np.array([0, 0, 150]), np.array([180, 50, 255]))
+        # 1. Steamed Rice (Chawal / Anna) — high brightness, low saturation, NOT skin
+        rice_mask = cv2.bitwise_and(cv2.inRange(hsv, np.array([0, 0, 150]), np.array([180, 50, 255])), not_skin)
         rice_ratio = np.count_nonzero(rice_mask) / total_px
-        if rice_ratio >= 0.035:
+        if rice_ratio >= 0.040:
             detected.append("Cooked Rice (Chawal)")
 
-        # 2. Dal / Sambar / Rasam / Turmeric Curry (golden-yellow, amber, warm orange)
-        dal_mask = cv2.inRange(hsv, np.array([8, 42, 48]), np.array([38, 255, 255]))
+        # 2. Dal / Sambar / Rasam / Turmeric Curry — warm golden-yellow/amber, NOT skin
+        dal_mask = cv2.bitwise_and(cv2.inRange(hsv, np.array([9, 50, 55]), np.array([36, 255, 255])), not_skin)
         dal_ratio = np.count_nonzero(dal_mask) / total_px
-        if dal_ratio >= 0.025:
+        if dal_ratio >= 0.030:
             detected.append("Dal / Sambar (Lentil Curry)")
 
-        # 3. Green Sabzi / Leafy Greens (Palak, Beans, Peas, Curry leaves)
-        veg_mask = cv2.inRange(hsv, np.array([34, 32, 32]), np.array([88, 255, 240]))
+        # 3. Green Sabzi / Leafy Greens (Palak, Beans, Peas, Curry leaves) — NOT skin
+        veg_mask = cv2.bitwise_and(cv2.inRange(hsv, np.array([34, 32, 32]), np.array([88, 255, 240])), not_skin)
         veg_ratio = np.count_nonzero(veg_mask) / total_px
         if veg_ratio >= 0.020:
             detected.append("Vegetable Sabzi / Greens")
 
-        # 4. Boiled Eggs (smooth white oval/circular clusters)
-        egg_mask = cv2.inRange(hsv, np.array([0, 0, 180]), np.array([180, 42, 255]))
+        # 4. Boiled Eggs (smooth white oval/circular clusters in vessels) — NOT skin
+        egg_mask = cv2.bitwise_and(cv2.inRange(hsv, np.array([0, 0, 180]), np.array([180, 40, 255])), not_skin)
         contours, _ = cv2.findContours(egg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         oval_count = 0
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            if 120 < area < (total_px * 0.07):
+            if 150 < area < (total_px * 0.07):
                 peri = cv2.arcLength(cnt, True)
                 if peri > 0:
                     circularity = 4 * np.pi * (area / (peri * peri))
-                    if circularity > 0.50:
+                    if circularity > 0.60:
                         oval_count += 1
-        if oval_count >= 4:
+        if oval_count >= 5:
             detected.append("Boiled Eggs")
 
-        # 5. Chana / Chickpeas / Legumes (golden-brown spherical granules)
-        chana_mask = cv2.inRange(hsv, np.array([10, 65, 65]), np.array([26, 230, 215]))
+        # 5. Chana / Chickpeas / Legumes (golden-brown spherical granules) — NOT skin
+        chana_mask = cv2.bitwise_and(cv2.inRange(hsv, np.array([10, 65, 65]), np.array([26, 230, 215])), not_skin)
         chana_ratio = np.count_nonzero(chana_mask) / total_px
         if chana_ratio >= 0.035 and "Dal / Sambar (Lentil Curry)" in detected and oval_count >= 2:
             detected.append("Chana / Chickpeas (Legumes)")
 
-        # 6. Roti / Chapati / Wheat Flatbread
-        roti_mask = cv2.inRange(hsv, np.array([12, 35, 110]), np.array([28, 160, 235]))
+        # 6. Roti / Chapati / Wheat Flatbread — NOT skin
+        roti_mask = cv2.bitwise_and(cv2.inRange(hsv, np.array([12, 35, 110]), np.array([28, 160, 235])), not_skin)
         roti_ratio = np.count_nonzero(roti_mask) / total_px
         if roti_ratio >= 0.040 and "Cooked Rice (Chawal)" not in detected:
             detected.append("Roti / Chapati")
 
-        # 7. Stainless Steel Dining Thali / Compartment Plate / Cooking Vessel
-        plate_mask = cv2.inRange(hsv, np.array([0, 0, 70]), np.array([180, 32, 220]))
+        # 7. Stainless Steel Dining Thali / Compartment Plate / Cooking Vessel — NOT skin
+        plate_mask = cv2.bitwise_and(cv2.inRange(hsv, np.array([0, 0, 70]), np.array([180, 32, 220])), not_skin)
         plate_ratio = np.count_nonzero(plate_mask) / total_px
-        if plate_ratio >= 0.06:
+        if plate_ratio >= 0.07:
             detected.append("Steel Thali / Vessel")
 
     except Exception as e:
         logger.debug(f"Chroma analysis error: {e}")
+
+    return detected
 
     return detected
 
@@ -374,17 +382,19 @@ def food_quality_check(image_path: str, menu_description: str = "") -> dict:
         indian_items = _detect_indian_meal_chroma(img)
 
         # Rejection: hand or skin area without genuine food vessels or food items
-        if skin_pct > 32.0 and not detected_food_items and not is_cls_food and not indian_items:
+        if skin_pct > 25.0 and not detected_food_items and not is_cls_food:
             return {
                 "cv_status": "CV_FLAG",
                 "cv_notes": f"Human hand/skin detected ({skin_pct:.0f}% skin area, no food or vessels). Flagged for inspection.",
-                "cv_confidence": 0.94,
+                "cv_confidence": 0.96,
                 "cv_processed_at": now
             }
 
         # Passing condition A: Verified Indian Mid-Day Meal items (Dal, Rice, Sambar, Sabzi, Roti, Thali)
         food_only_items = [it for it in indian_items if it != "Steel Thali / Vessel"]
-        if len(food_only_items) >= 1 or len(indian_items) >= 2 or (len(indian_items) >= 1 and (detected_food_items or is_cls_food)):
+        has_real_indian_food = (len(food_only_items) >= 1) or len(indian_items) >= 2 or (len(indian_items) >= 1 and (detected_food_items or is_cls_food))
+
+        if has_real_indian_food and (skin_pct <= 25.0 or detected_food_items or is_cls_food):
             all_found = list(dict.fromkeys(indian_items + [item.split()[0].title() for item in detected_food_items]))
             items_str = ", ".join(all_found[:6])
             return {
@@ -418,7 +428,7 @@ def food_quality_check(image_path: str, menu_description: str = "") -> dict:
         return {
             "cv_status": "CV_FLAG",
             "cv_notes": f"No recognizable food items, vessels, or cookware detected (classified: {clean_name}). Flagged for review.",
-            "cv_confidence": 0.85,
+            "cv_confidence": 0.88,
             "cv_processed_at": now
         }
 
