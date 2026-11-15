@@ -7,104 +7,104 @@ export const AP_MDM_ZONES = {
   1: {
     id: 1,
     name: 'Zone 1',
-    districts: 'Srikakulam, Vizianagaram, Visakhapatnam',
+    districts: 'Srikakulam, Parvathipuram Manyam, Vizianagaram, Visakhapatnam, ASR, Anakapalli',
     pdfUrl: 'https://drive.google.com/file/d/1cSXKNpp_UMbiZNt-xQR2LeGtAF1rJQLz/view?usp=sharing',
     schedule: {
       Monday: {
-        title: 'White Rice, Akurapappu, Boiled Egg, Chikki',
-        items: ['White Rice', 'Akurapappu (Leafy Dal)', 'Boiled Egg', 'Chikki'],
-        description: 'Steamed white rice served with leafy greens dal (akurapappu), whole boiled egg, and groundnut chikki.'
+        title: 'White Rice, Akukura pappu, Boiled Egg, Chikki',
+        items: ['White Rice', 'Akukura pappu', 'Boiled Egg', 'Chikki'],
+        description: 'Steamed white rice served with leafy greens dal (akukura pappu), boiled egg, and peanut chikki.'
       },
       Tuesday: {
-        title: 'White Rice, Egg Curry, Rasam, Ragi-Java',
-        items: ['White Rice', 'Egg Curry', 'Rasam', 'Ragi-Java'],
-        description: 'White rice served with seasoned egg curry, traditional rasam, and nutritious ragi-java drink.'
+        title: 'White Rice, Egg Curry, Rasam, Ragi Java',
+        items: ['White Rice', 'Egg Curry', 'Rasam', 'Ragi Java'],
+        description: 'White rice served with seasoned egg curry, traditional rasam, and nutritious ragi java.'
       },
       Wednesday: {
         title: 'Veg Palav, Aloo Kurma, Boiled Egg, Chikki',
         items: ['Veg Palav', 'Aloo Kurma', 'Boiled Egg', 'Chikki'],
-        description: 'Vegetable palav/pulao served with spiced aloo kurma, whole boiled egg, and chikki.'
+        description: 'Vegetable palav served with spiced aloo kurma, boiled egg, and chikki.'
       },
       Thursday: {
-        title: 'White Rice, Sambar, Egg Curry, Ragi-Java',
-        items: ['White Rice', 'Sambar', 'Egg Curry', 'Ragi-Java'],
-        description: 'White rice served with mixed vegetable sambar, boiled egg curry, and ragi-java.'
+        title: 'White Rice, Sambar, Egg Curry, Ragi Java',
+        items: ['White Rice', 'Sambar', 'Egg Curry', 'Ragi Java'],
+        description: 'White rice served with sambar, egg curry, and ragi java.'
       },
       Friday: {
-        title: 'Tamarind Rice, Chutney (Gongura/Veg), Boiled Egg, Chikki',
-        items: ['Tamarind Rice', 'Vegetable / Gongura Chutney', 'Boiled Egg', 'Chikki'],
-        description: 'Flavored tamarind rice (pulihora) with fresh gongura/vegetable chutney, boiled egg, and chikki.'
+        title: 'Tamarind Rice, Chutney (Gongura/Vegetables), Boiled Egg, Chikki',
+        items: ['Tamarind Rice', 'Chutney (Gongura/Vegetables)', 'Boiled Egg', 'Chikki'],
+        description: 'Tamarind rice (pulihora) served with gongura/vegetable chutney, boiled egg, and chikki.'
       },
       Saturday: {
-        title: 'White Rice, Vegetable Curry, Rasam, Ragi-Java, Sweet Pongal',
-        items: ['White Rice', 'Vegetable Curry', 'Rasam', 'Ragi-Java', 'Sweet Pongal'],
-        description: 'White rice with mixed vegetable curry, pepper rasam, ragi-java, and traditional jaggery sweet pongal.'
+        title: 'White Rice, Vegetable Curry, Rasam, Ragi Java, Sweet Pongal',
+        items: ['White Rice', 'Vegetable Curry', 'Rasam', 'Ragi Java', 'Sweet Pongal'],
+        description: 'White rice with vegetable curry, rasam, ragi java, and sweet pongal.'
       }
     }
   },
   2: {
     id: 2,
     name: 'Zone 2',
-    districts: 'East Godavari, West Godavari, Krishna',
+    districts: 'Kakinada, East Godavari, Konaseema, Eluru, West Godavari, Krishna, NTR',
     pdfUrl: 'https://drive.google.com/file/d/1tGqPaUXLWflUfUnPqgIMQ_-hztGhPmk9/view?usp=sharing',
     schedule: {
       Monday: {
-        title: 'White Rice, Green Leafy Dal, Boiled Egg',
-        items: ['White Rice', 'Green Leafy Dal', 'Boiled Egg'],
-        description: 'Freshly cooked white rice with spinach/leafy toor dal and boiled egg.'
+        title: 'White Rice, Veg/Green Leafy Dal, Fried Egg, Chikki',
+        items: ['White Rice', 'Veg/Green Leafy Dal', 'Fried Egg', 'Chikki'],
+        description: 'Steamed white rice with vegetable/green leafy dal, fried egg, and peanut chikki.'
       },
       Tuesday: {
-        title: 'Biryani / Vegetable Pulav, Vegetable Chutney, Egg Curry',
-        items: ['Vegetable Pulav / Biryani', 'Vegetable Chutney', 'Egg Curry'],
-        description: 'Vegetable biryani / pulao served with spiced egg curry and fresh vegetable chutney.'
+        title: 'Tamarind/Lemon Rice, Boiled Egg, Chutney, Ragijava',
+        items: ['Tamarind/Lemon Rice', 'Boiled Egg', 'Chutney', 'Ragijava'],
+        description: 'Tamarind/lemon rice served with whole boiled egg, fresh chutney, and ragijava.'
       },
       Wednesday: {
-        title: 'Tamarind / Lemon Rice, White Rice, Egg Fry, Mixed Veg Curry',
-        items: ['Tamarind / Lemon Rice', 'White Rice', 'Egg Fry', 'Mixed Vegetable Curry'],
-        description: 'Tamarind/lemon flavored rice and white rice with egg fry and mixed seasonal vegetable curry.'
+        title: 'White Rice, Mixed Vegetable curry, Fried Egg, Chikki',
+        items: ['White Rice', 'Mixed Vegetable curry', 'Fried Egg', 'Chikki'],
+        description: 'White rice served with mixed vegetable curry, fried egg, and chikki.'
       },
       Thursday: {
-        title: 'White Rice, Sambar with Vegetables / Green Leaves, Boiled Egg',
-        items: ['White Rice', 'Vegetable / Leafy Sambar', 'Boiled Egg'],
-        description: 'White rice served with vegetable & leafy greens sambar, accompanied by whole boiled egg.'
+        title: 'Vegetable Rice/Pulav, Aloo Kurma, Boiled Egg, Ragijava',
+        items: ['Vegetable Rice/Pulav', 'Aloo Kurma', 'Boiled Egg', 'Ragijava'],
+        description: 'Vegetable rice/pulav with aloo kurma, boiled egg, and ragijava.'
       },
       Friday: {
-        title: 'Green Leafy Rice / White Rice, Egg Fry, Mixed Vegetable Curry',
-        items: ['Green Leafy Rice / White Rice', 'Egg Fry', 'Mixed Vegetable Curry'],
-        description: 'Nutritious green leafy rice or white rice served with pan-tossed egg fry and vegetable curry.'
+        title: 'White Rice, Dal with green leaves, Fried Egg, Chikki',
+        items: ['White Rice', 'Dal with green leaves', 'Fried Egg', 'Chikki'],
+        description: 'White rice served with dal with green leaves, fried egg, and chikki.'
       },
       Saturday: {
-        title: 'White Rice, Rasam, any Vegetable Curry, Sweet Pongal',
-        items: ['White Rice', 'Rasam', 'Vegetable Curry', 'Sweet Pongal'],
-        description: 'White rice with hot rasam, seasonal vegetable curry, and delicious sweet pongal.'
+        title: 'White Rice, Mix Vegetable Curry, Sweet Pongal, Ragijava',
+        items: ['White Rice', 'Mix Vegetable Curry', 'Sweet Pongal', 'Ragijava'],
+        description: 'White rice with mixed vegetable curry, traditional sweet pongal, and ragijava.'
       }
     }
   },
   3: {
     id: 3,
     name: 'Zone 3',
-    districts: 'Guntur, Nellore, Prakasam',
+    districts: 'Guntur, Palnadu, Bapatla, Prakasam, SPSR Nellore',
     pdfUrl: 'https://drive.google.com/file/d/1Mhn4bJqzLZevmKiClOs103CEZTOz5xT3/view?usp=sharing',
     schedule: {
       Monday: {
         title: 'White Rice, Sambar with Vegetables, Egg Fry, Chikki',
-        items: ['White Rice', 'Vegetable Sambar', 'Egg Fry', 'Chikki'],
-        description: 'White rice served with rich vegetable sambar, seasoned egg fry, and peanut chikki.'
+        items: ['White Rice', 'Sambar with Vegetables', 'Egg Fry', 'Chikki'],
+        description: 'White rice served with sambar with vegetables, egg fry, and chikki.'
       },
       Tuesday: {
-        title: 'Tamarind / Lemon Rice, Chutney (Tomato / Pudina), Fried Egg, Ragi-Java',
-        items: ['Tamarind / Lemon Rice', 'Tomato / Pudina Chutney', 'Fried Egg', 'Ragi-Java'],
-        description: 'Tamarind/lemon rice with fresh tomato or mint chutney, fried egg, and ragi-java.'
+        title: 'Tamarind/Lemon Rice, Chutney with Tomato/Pudina, Fried Egg, Ragijava',
+        items: ['Tamarind/Lemon Rice', 'Chutney with Tomato/Pudina', 'Fried Egg', 'Ragijava'],
+        description: 'Tamarind/lemon rice with tomato/pudina chutney, fried egg, and ragijava.'
       },
       Wednesday: {
-        title: 'White Rice, Mixed Vegetable Curry (Min. 4 Veg), Egg Fry, Chikki',
-        items: ['White Rice', 'Mixed Vegetable Curry', 'Egg Fry', 'Chikki'],
-        description: 'White rice served with 4-vegetable curry, boiled/fried egg, and healthy chikki.'
+        title: 'White Rice, Mixed Vegetable Curry (minimum 4 vegetables), Egg Fry, Chikki',
+        items: ['White Rice', 'Mixed Vegetable Curry (minimum 4 vegetables)', 'Egg Fry', 'Chikki'],
+        description: 'White rice served with mixed vegetable curry (min 4 vegetables), egg fry, and chikki.'
       },
       Thursday: {
-        title: 'Vegetable Rice / Pulav, Aloo Kurma, Boiled Egg, Ragi-Java',
-        items: ['Vegetable Rice / Pulav', 'Aloo Kurma', 'Boiled Egg', 'Ragi-Java'],
-        description: 'Fragrant vegetable pulao with thick aloo kurma gravy, boiled egg, and ragi-java.'
+        title: 'Vegetable Rice /Pulav, Aloo Khurma, Boiled Egg, Ragijava',
+        items: ['Vegetable Rice /Pulav', 'Aloo Khurma', 'Boiled Egg', 'Ragijava'],
+        description: 'Vegetable rice/pulav with aloo khurma gravy, boiled egg, and ragijava.'
       },
       Friday: {
         title: 'White Rice, Egg Curry, Chikki',
@@ -112,47 +112,47 @@ export const AP_MDM_ZONES = {
         description: 'Steamed white rice served with Andhra-style egg curry and chikki.'
       },
       Saturday: {
-        title: 'White Rice, Tomato Pappu / Pappucharu, Sweet Pongal, Ragi-Java',
-        items: ['White Rice', 'Tomato Pappu / Pappucharu', 'Sweet Pongal', 'Ragi-Java'],
-        description: 'White rice with tangy tomato dal/pappucharu, sweet jaggery pongal, and ragi-java.'
+        title: 'White Rice, Tomato Pappu/ Pappucharu, Sweet Pongal, Ragijava',
+        items: ['White Rice', 'Tomato Pappu/ Pappucharu', 'Sweet Pongal', 'Ragijava'],
+        description: 'White rice with tomato pappu/pappucharu, sweet pongal, and ragijava.'
       }
     }
   },
   4: {
     id: 4,
     name: 'Zone 4',
-    districts: 'Chittoor, Kurnool, Kadapa, Anantapur',
+    districts: 'Tirupathi, Chittoor, Annamayya, YSR Kadapa, Sri Satya Sai, Anantapuram, Kurnool, Nandyala',
     pdfUrl: 'https://drive.google.com/file/d/1-40-CPa7ySolFJFgyyXs7jJtg76fsNiJ/view?usp=sharing',
     schedule: {
       Monday: {
         title: 'White Rice, Vegetable Curry, Egg, Chikki',
         items: ['White Rice', 'Vegetable Curry', 'Egg', 'Chikki'],
-        description: 'White rice served with mixed vegetable curry, whole egg, and peanut chikki.'
+        description: 'White rice served with vegetable curry, egg, and chikki.'
       },
       Tuesday: {
-        title: 'Pulagam, Groundnut Chutney / Tamarind Rice, Egg (Salt + Karam), Ragi-Java',
-        items: ['Pulagam / Tamarind Rice', 'Groundnut Chutney', 'Spiced Egg', 'Ragi-Java'],
-        description: 'Traditional pulagam or tamarind rice with peanut chutney, salted chili egg, and ragi-java.'
+        title: 'Pulagam/Lemon rice/Tamarind Rice, Ground Nut Chutney, Egg with Salt+ Karam, Ragi Java',
+        items: ['Pulagam/Lemon rice/Tamarind Rice', 'Ground Nut Chutney', 'Egg with Salt+ Karam', 'Ragi Java'],
+        description: 'Pulagam/lemon rice/tamarind rice with ground nut chutney, egg with salt+karam, and ragi java.'
       },
       Wednesday: {
         title: 'White Rice, Vegetable Sambar, Egg, Chikki',
         items: ['White Rice', 'Vegetable Sambar', 'Egg', 'Chikki'],
-        description: 'Steamed white rice with fresh vegetable sambar, boiled egg, and chikki.'
+        description: 'Steamed white rice with vegetable sambar, egg, and chikki.'
       },
       Thursday: {
-        title: 'Vegetable Rice, Egg Curry, Ragi-Java',
-        items: ['Vegetable Rice', 'Egg Curry', 'Ragi-Java'],
-        description: 'Seasoned vegetable rice served with egg curry and wholesome ragi-java.'
+        title: 'Vegetable Rice, Egg Curry, Ragijava',
+        items: ['Vegetable Rice', 'Egg Curry', 'Ragijava'],
+        description: 'Vegetable rice served with egg curry and ragijava.'
       },
       Friday: {
         title: 'White Rice, Leafy Dal, Boiled Egg, Chikki',
         items: ['White Rice', 'Leafy Dal', 'Boiled Egg', 'Chikki'],
-        description: 'White rice served with green leafy dal (palakura/thotakura pappu), boiled egg, and chikki.'
+        description: 'White rice served with leafy dal, boiled egg, and chikki.'
       },
       Saturday: {
-        title: 'White Rice, Kandipappu Charu, Bellam Pongali, Ragi-Java',
-        items: ['White Rice', 'Kandipappu Charu', 'Bellam Pongali', 'Ragi-Java'],
-        description: 'White rice with flavorful kandipappu charu (toor dal rasam), bellam pongali, and ragi-java.'
+        title: 'White Rice, Kandipappu Charu, Bellam Pongali with minimum Bellam, Ragijava',
+        items: ['White Rice', 'Kandipappu Charu', 'Bellam Pongali with minimum Bellam', 'Ragijava'],
+        description: 'White rice with kandipappu charu, bellam pongali (with min bellam), and ragijava.'
       }
     }
   }

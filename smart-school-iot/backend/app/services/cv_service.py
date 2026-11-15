@@ -224,40 +224,40 @@ def _get_det_model():
 
 AP_MDM_ZONE_MENUS_2025 = {
     1: {
-        "name": "Zone 1 (Srikakulam, Vizianagaram, Visakhapatnam)",
-        "Monday": ["White Rice", "Akurapappu (Leafy Dal)", "Boiled Egg", "Chikki"],
-        "Tuesday": ["White Rice", "Egg Curry", "Rasam", "Ragi-Java"],
+        "name": "Zone 1 (Srikakulam, Parvathipuram Manyam, Vizianagaram, Visakhapatnam, ASR, Anakapalli)",
+        "Monday": ["White Rice", "Akukura pappu", "Boiled Egg", "Chikki"],
+        "Tuesday": ["White Rice", "Egg Curry", "Rasam", "Ragi Java"],
         "Wednesday": ["Veg Palav", "Aloo Kurma", "Boiled Egg", "Chikki"],
-        "Thursday": ["White Rice", "Sambar", "Egg Curry", "Ragi-Java"],
-        "Friday": ["Tamarind Rice", "Chutney (Gongura/Veg)", "Boiled Egg", "Chikki"],
-        "Saturday": ["White Rice", "Vegetable Curry", "Rasam", "Ragi-Java", "Sweet Pongal"],
+        "Thursday": ["White Rice", "Sambar", "Egg Curry", "Ragi Java"],
+        "Friday": ["Tamarind Rice", "Chutney (Gongura/Vegetables)", "Boiled Egg", "Chikki"],
+        "Saturday": ["White Rice", "Vegetable Curry", "Rasam", "Ragi Java", "Sweet Pongal"],
     },
     2: {
-        "name": "Zone 2 (East Godavari, West Godavari, Krishna)",
-        "Monday": ["White Rice", "Green Leafy Dal", "Boiled Egg"],
-        "Tuesday": ["Biryani / Veg Pulav", "Vegetable Chutney", "Egg Curry"],
-        "Wednesday": ["Tamarind/Lemon Rice", "White Rice", "Egg Fry", "Mixed Veg Curry"],
-        "Thursday": ["White Rice", "Sambar with Veg/Leaves", "Boiled Egg"],
-        "Friday": ["Green Leafy Rice / White Rice", "Egg Fry", "Mixed Veg Curry"],
-        "Saturday": ["White Rice", "Rasam", "Vegetable Curry", "Sweet Pongal"],
+        "name": "Zone 2 (Kakinada, East Godavari, Konaseema, Eluru, West Godavari, Krishna, NTR)",
+        "Monday": ["White Rice", "Veg/Green Leafy Dal", "Fried Egg", "Chikki"],
+        "Tuesday": ["Tamarind/Lemon Rice", "Boiled Egg", "Chutney", "Ragijava"],
+        "Wednesday": ["White Rice", "Mixed Vegetable curry", "Fried Egg", "Chikki"],
+        "Thursday": ["Vegetable Rice/Pulav", "Aloo Kurma", "Boiled Egg", "Ragijava"],
+        "Friday": ["White Rice", "Dal with green leaves", "Fried Egg", "Chikki"],
+        "Saturday": ["White Rice", "Mix Vegetable Curry", "Sweet Pongal", "Ragijava"],
     },
     3: {
-        "name": "Zone 3 (Guntur, Nellore, Prakasam)",
+        "name": "Zone 3 (Guntur, Palnadu, Bapatla, Prakasam, SPSR Nellore)",
         "Monday": ["White Rice", "Sambar with Vegetables", "Egg Fry", "Chikki"],
-        "Tuesday": ["Tamarind/Lemon Rice", "Tomato / Pudina Chutney", "Fried Egg", "Ragi-Java"],
-        "Wednesday": ["White Rice", "Mixed Veg Curry (Min 4 Veg)", "Egg Fry", "Chikki"],
-        "Thursday": ["Vegetable Rice / Pulav", "Aloo Kurma", "Boiled Egg", "Ragi-Java"],
+        "Tuesday": ["Tamarind/Lemon Rice", "Chutney with Tomato/Pudina", "Fried Egg", "Ragijava"],
+        "Wednesday": ["White Rice", "Mixed Vegetable Curry (minimum 4 vegetables)", "Egg Fry", "Chikki"],
+        "Thursday": ["Vegetable Rice /Pulav", "Aloo Khurma", "Boiled Egg", "Ragijava"],
         "Friday": ["White Rice", "Egg Curry", "Chikki"],
-        "Saturday": ["White Rice", "Tomato Pappu / Pappucharu", "Sweet Pongal", "Ragi-Java"],
+        "Saturday": ["White Rice", "Tomato Pappu/ Pappucharu", "Sweet Pongal", "Ragijava"],
     },
     4: {
-        "name": "Zone 4 (Chittoor, Kurnool, Kadapa, Anantapur)",
+        "name": "Zone 4 (Tirupathi, Chittoor, Annamayya, YSR Kadapa, Sri Satya Sai, Anantapuram, Kurnool, Nandyala)",
         "Monday": ["White Rice", "Vegetable Curry", "Egg", "Chikki"],
-        "Tuesday": ["Pulagam / Tamarind Rice", "Groundnut Chutney", "Spiced Egg", "Ragi-Java"],
+        "Tuesday": ["Pulagam/Lemon rice/Tamarind Rice", "Ground Nut Chutney", "Egg with Salt+ Karam", "Ragi Java"],
         "Wednesday": ["White Rice", "Vegetable Sambar", "Egg", "Chikki"],
-        "Thursday": ["Vegetable Rice", "Egg Curry", "Ragi-Java"],
+        "Thursday": ["Vegetable Rice", "Egg Curry", "Ragijava"],
         "Friday": ["White Rice", "Leafy Dal", "Boiled Egg", "Chikki"],
-        "Saturday": ["White Rice", "Kandipappu Charu", "Bellam Pongali", "Ragi-Java"],
+        "Saturday": ["White Rice", "Kandipappu Charu", "Bellam Pongali with minimum Bellam", "Ragijava"],
     }
 }
 
@@ -438,16 +438,14 @@ def _analyze_skin_and_hands(img_or_path, img_path: Optional[str] = None) -> Dict
         h_c = (hsv[:, :, 0].astype(int) * 360) // 180
         s_c = hsv[:, :, 1].astype(int)
 
-        # Precise skin chrominance: warm flesh tone
-        # Skin has low-to-moderate saturation (15 <= S <= 68) and flesh hue (H <= 24 or H >= 345)
-        # Yellow turmeric dal has Hue 25..55 or S >= 70, separating skin cleanly from dal.
+        # Precise skin chrominance: human hand, palm, and facial skin segmentation
         skin_mask = (
-            (cr >= 132) & (cr <= 173) &
-            (cb >= 105) & (cb <= 130) &
+            (cr >= 128) & (cr <= 175) &
+            (cb >= 95) & (cb <= 135) &
             (cr > cb) &
-            (r_i > g_i) & ((r_i - b_i) >= 14) &
-            (s_c >= 15) & (s_c <= 68) &
-            ((h_c <= 24) | (h_c >= 345))
+            (r_i >= g_i) & ((r_i - b_i) >= 4) &
+            (s_c >= 10) & (s_c <= 180) &
+            ((h_c <= 35) | (h_c >= 340))
         )
         skin_px = int(np.count_nonzero(skin_mask))
         skin_pct = (skin_px / tot) * 100.0
@@ -461,7 +459,7 @@ def _analyze_skin_and_hands(img_or_path, img_path: Optional[str] = None) -> Dict
             max_area = int(np.max(areas)) if len(areas) > 0 else 0
             max_blob_ratio = max_area / (thumb_h * thumb_w)
 
-        is_hand_closeup = (max_blob_ratio >= 0.28 and skin_pct >= 22.0) or (skin_pct >= 38.0)
+        is_hand_closeup = (max_blob_ratio >= 0.22 and skin_pct >= 20.0) or (max_blob_ratio >= 0.28) or (skin_pct >= 45.0)
         return {
             "skin_pct": round(skin_pct, 1),
             "is_hand_closeup": is_hand_closeup,
@@ -495,12 +493,12 @@ def _analyze_skin_and_hands(img_or_path, img_path: Optional[str] = None) -> Dict
                 s_arr = np.frombuffer(s_bytes, dtype=np.uint8).reshape((120, 160)).astype(int)
 
                 skin = (
-                    (cr >= 132) & (cr <= 173) &
-                    (cb >= 105) & (cb <= 130) &
+                    (cr >= 128) & (cr <= 175) &
+                    (cb >= 95) & (cb <= 135) &
                     (cr > cb) &
-                    (r > g) & ((r - b) >= 14) &
-                    (s_arr >= 15) & (s_arr <= 68) &
-                    ((h_arr <= 24) | (h_arr >= 345))
+                    (r >= g) & ((r - b) >= 4) &
+                    (s_arr >= 10) & (s_arr <= 180) &
+                    ((h_arr <= 35) | (h_arr >= 340))
                 )
                 skin_pct = (np.count_nonzero(skin) / tot) * 100.0
 
@@ -526,7 +524,7 @@ def _analyze_skin_and_hands(img_or_path, img_path: Optional[str] = None) -> Dict
 
                 max_area = max(components) if components else 0
                 max_blob_ratio = max_area / tot
-                is_hand_closeup = (max_blob_ratio >= 0.28 and skin_pct >= 22.0) or (skin_pct >= 38.0)
+                is_hand_closeup = (max_blob_ratio >= 0.22 and skin_pct >= 20.0) or (max_blob_ratio >= 0.28) or (skin_pct >= 45.0)
                 skin_mask = skin
             else:
                 pix = list(thumb.getdata())
@@ -536,11 +534,11 @@ def _analyze_skin_and_hands(img_or_path, img_path: Optional[str] = None) -> Dict
                     s_val = s_bytes[idx]
                     cr = 128.0 + 0.500 * r_val - 0.418688 * g_val - 0.081312 * b_val
                     cb = 128.0 - 0.168736 * r_val - 0.331264 * g_val + 0.500 * b_val
-                    is_s = (132 <= cr <= 173 and 105 <= cb <= 130 and cr > cb and r_val > g_val and (r_val - b_val >= 14) and 15 <= s_val <= 68 and (h_deg <= 24 or h_deg >= 345))
+                    is_s = (128 <= cr <= 175 and 95 <= cb <= 135 and cr > cb and r_val >= g_val and (r_val - b_val >= 4) and 10 <= s_val <= 180 and (h_deg <= 35 or h_deg >= 340))
                     if is_s:
                         skin_cnt += 1
                 skin_pct = (skin_cnt / tot) * 100.0
-                is_hand_closeup = skin_pct >= 38.0
+                is_hand_closeup = skin_pct >= 35.0
 
         except Exception as e:
             logger.warning(f"Pillow skin analysis warning: {e}")
@@ -606,7 +604,7 @@ def _detect_indian_food_items_pillow(img_path: str) -> Tuple[List[str], List[str
 
             cr = 128.0 + 0.500 * r_val - 0.418688 * g_val - 0.081312 * b_val
             cb = 128.0 - 0.168736 * r_val - 0.331264 * g_val + 0.500 * b_val
-            is_skin_px = (132 <= cr <= 173 and 105 <= cb <= 130 and cr > cb and r_val > g_val and (r_val - b_val >= 14) and 15 <= s <= 68 and (h <= 24 or h >= 345))
+            is_skin_px = (128 <= cr <= 175 and 95 <= cb <= 135 and cr > cb and r_val >= g_val and (r_val - b_val >= 4) and 10 <= s <= 180 and (h <= 35 or h >= 340))
 
             if not is_skin_px:
                 # 1. White rice: neutral high luminance, low saturation
@@ -753,12 +751,12 @@ def _detect_indian_food_items_opencv(img, img_path: str) -> Tuple[List[str], Lis
 
     # Non-skin mask: human hand/skin cannot be counted as mid-day meal components
     is_skin = (
-        (cr >= 132) & (cr <= 173) &
-        (cb >= 105) & (cb <= 130) &
+        (cr >= 128) & (cr <= 175) &
+        (cb >= 95) & (cb <= 135) &
         (cr > cb) &
-        (r_i > g_i) & ((r_i - b_i) >= 14) &
-        (s_c >= 15) & (s_c <= 68) &
-        ((h_deg <= 24) | (h_deg >= 345))
+        (r_i >= g_i) & ((r_i - b_i) >= 4) &
+        (s_c >= 10) & (s_c <= 180) &
+        ((h_deg <= 35) | (h_deg >= 340))
     )
     non_skin = ~is_skin
 
@@ -955,8 +953,8 @@ def _gemini_vision_check(
             '  "matched_items": ["item1", "item2"],\n'
             '  "missing_items": ["item3"]\n'
             "}\n\n"
-            "Flag (status: FLAG) if the image is blank/black, shows human fingers/skin instead of food, shows non-food clutter, or fails to meet the official menu.\n"
-            "Pass (status: PASS) if at least 50% of the statutory menu items for this zone and day are clearly visible in the meal or cooking vessels."
+            "Flag (status: FLAG) if the image is blank/black, shows human fingers/skin instead of food, shows non-food clutter, or fails to meet 100% of the official menu.\n"
+            "Pass (status: PASS) ONLY if 100% of the statutory menu items for this zone and day are clearly visible in the meal or cooking vessels. If any single item is missing, flag (status: FLAG)."
         )
 
         # Try models in order of best performance
@@ -981,7 +979,7 @@ def _gemini_vision_check(
                 }
             }
 
-            resp = requests.post(url, json=payload, timeout=18)
+            resp = requests.post(url, json=payload, timeout=3.5)
             if resp.status_code == 200:
                 data = resp.json()
                 candidates = data.get("candidates", [])
@@ -994,11 +992,11 @@ def _gemini_vision_check(
                     raw_text = raw_text.strip()
                     parsed = json.loads(raw_text)
 
-                    is_pass = str(parsed.get("status", "FLAG")).upper() == "PASS"
                     reason = parsed.get("reason", "")
                     food = parsed.get("food_detected", "Indian Meal Items")
                     confidence = float(parsed.get("confidence", 0.95))
-                    match_pct = float(parsed.get("match_percentage", 100.0 if is_pass else 0.0))
+                    match_pct = float(parsed.get("match_percentage", 0.0))
+                    is_pass = (str(parsed.get("status", "FLAG")).upper() == "PASS") and (match_pct >= 99.9)
 
                     matched = parsed.get("matched_items", [])
                     missing = parsed.get("missing_items", [])
@@ -1219,8 +1217,8 @@ def food_quality_check(
             all_found += [v.split()[0].title() for v in yolo_vessels if v.split()[0].title() not in all_found]
         found_str = ", ".join(all_found[:8])
 
-        # A meal passes if menu match >= 50% or if at least 2 core dishes / plate verified with >= 33.3% match
-        is_pass = (match_pct >= 50.0) or (match_pct >= 33.3 and (len(core_foods) >= 2 or plate_found))
+        # Strict Statutory 100% Match Requirement: Food CV ONLY passes when it achieves 100% match with the official menu
+        is_pass = (match_pct >= 99.9) and not skin_analysis["is_hand_closeup"] and (len(core_foods) >= 2 or plate_found)
         status = "CV_PASS" if is_pass else "CV_FLAG"
 
         confidence = 0.95 if any(f in detected_dishes for f in ["White Rice (Steamed Rice)", "Cooked Rice (Chawal)", "Dal / Sambar (Lentil Curry)", "Boiled Egg"]) else 0.88
@@ -1283,7 +1281,7 @@ def _gemini_student_count(image_path: str, api_key: str) -> Optional[dict]:
                 }],
                 "generationConfig": {"temperature": 0.1, "maxOutputTokens": 150}
             }
-            resp = requests.post(url, json=payload, timeout=12)
+            resp = requests.post(url, json=payload, timeout=3.5)
             if resp.status_code == 200:
                 data = resp.json()
                 candidates = data.get("candidates", [])

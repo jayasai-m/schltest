@@ -23,7 +23,14 @@ from ..services.cv_service import food_quality_check, count_students_in_image
 router = APIRouter(prefix="/api/school", tags=["School Panel"])
 
 HARDWARE_TIMEOUT_SECONDS = int(os.getenv("HARDWARE_TIMEOUT_SECONDS", "120"))
-UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
+
+import tempfile
+_tmp_dir = "/tmp" if os.name != "nt" else tempfile.gettempdir()
+_backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_default_uploads = os.path.join(_tmp_dir, "uploads") if (os.getenv("VERCEL") or not os.access(".", os.W_OK)) else os.path.join(_backend_dir, "uploads")
+UPLOAD_DIR = os.getenv("UPLOAD_DIR") or _default_uploads
+if not os.path.isabs(UPLOAD_DIR) or (os.getenv("VERCEL") and not UPLOAD_DIR.startswith(_tmp_dir)):
+    UPLOAD_DIR = os.path.join(_tmp_dir, "uploads")
 
 def get_live_hardware_status(school: School) -> dict:
     if not school.last_hardware_ping:
@@ -235,7 +242,12 @@ def upload_school_image(
             detail=f"Category must be one of: {', '.join(VALID_CATEGORIES)}"
         )
         
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    global UPLOAD_DIR
+    try:
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+    except OSError:
+        UPLOAD_DIR = os.path.join(_tmp_dir, "uploads")
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
     
     orig_ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
     file_ext = orig_ext if orig_ext in [".jpg", ".jpeg", ".png", ".webp"] else ".jpg"
@@ -447,7 +459,12 @@ def upload_student_batch(
     if not files or len(files) == 0:
         raise HTTPException(status_code=400, detail="At least one image must be provided.")
 
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    global UPLOAD_DIR
+    try:
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+    except OSError:
+        UPLOAD_DIR = os.path.join(_tmp_dir, "uploads")
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
 
     ANGLE_LABELS = [
         "Front Center", "Front Left", "Front Right", "Left Corridor",
