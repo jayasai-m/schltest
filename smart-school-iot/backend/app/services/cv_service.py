@@ -70,9 +70,7 @@ except Exception:
 
 # COCO Classes relevant for culinary dining and tableware
 FOOD_COCO_CLASSES = {
-    'bowl', 'cup', 'bottle', 'fork', 'knife', 'spoon', 'dining table',
-    'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot',
-    'hot dog', 'pizza', 'donut', 'cake'
+    'bowl', 'cup', 'dining table', 'fork', 'spoon', 'knife', 'bottle'
 }
 
 # Indian Food Dish Taxonomy with comprehensive regional synonyms for AP MDM 2025
@@ -438,26 +436,26 @@ def _analyze_skin_and_hands(img_or_path, img_path: Optional[str] = None) -> Dict
         r_i, g_i, b_i = r.astype(int), g.astype(int), b.astype(int)
 
         # Standard YCrCb skin chrominance
-        s_std = (cr >= 133) & (cr <= 173) & (cb >= 77) & (cb <= 128) & (cr > cb)
+        s_std = (cr >= 133) & (cr <= 173) & (cb >= 77) & (cb <= 128) & (cr > cb) & (r_i > g_i) & (r_i - b_i >= 15)
         # Warm RGB flesh tone
-        s_rgb = (r_i > 95) & (g_i > 40) & (b_i > 20) & (r_i > g_i + 3) & (r_i > b_i + 10) & (cr >= 130) & (cr > cb)
+        s_rgb = (r_i > 95) & (g_i > 40) & (b_i > 20) & (r_i > g_i + 3) & (r_i - b_i >= 15) & (cr >= 130) & (cr > cb)
         # Pale palm flesh tone (indoor camera white balance)
-        s_palm = (r_i >= 130) & (g_i >= 115) & (b_i >= 95) & (r_i >= g_i) & (r_i >= b_i + 4) & (cr >= 129) & (cr > cb)
+        s_palm = (r_i >= 125) & (g_i >= 100) & (b_i >= 75) & (r_i >= g_i) & (r_i - b_i >= 15) & (cr >= 127) & (cr >= cb)
 
-        skin_mask = (s_std | s_rgb | s_palm).astype(np.uint8)
-        skin_px = int(np.sum(skin_mask))
+        skin_mask = (s_std | s_rgb | s_palm)
+        skin_px = int(np.count_nonzero(skin_mask))
         skin_pct = (skin_px / tot) * 100.0
 
         # Fast connected components on small thumbnail to measure largest continuous blob
         thumb_h, thumb_w = 120, 160
-        thumb_mask = cv2.resize(skin_mask, (thumb_w, thumb_h), interpolation=cv2.INTER_NEAREST)
+        thumb_mask = cv2.resize(skin_mask.astype(np.uint8), (thumb_w, thumb_h), interpolation=cv2.INTER_NEAREST)
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(thumb_mask)
         if num_labels > 1:
             areas = stats[1:, cv2.CC_STAT_AREA]
             max_area = int(np.max(areas)) if len(areas) > 0 else 0
             max_blob_ratio = max_area / (thumb_h * thumb_w)
 
-        is_hand_closeup = (max_blob_ratio >= 0.22) and (skin_pct >= 28.0)
+        is_hand_closeup = (max_blob_ratio >= 0.18 and skin_pct >= 22.0) or (skin_pct >= 55.0)
         return {
             "skin_pct": round(skin_pct, 1),
             "is_hand_closeup": is_hand_closeup,
@@ -483,9 +481,9 @@ def _analyze_skin_and_hands(img_or_path, img_path: Optional[str] = None) -> Dict
                 cr = 128.0 + 0.500 * r - 0.418688 * g - 0.081312 * b
                 cb = 128.0 - 0.168736 * r - 0.331264 * g + 0.500 * b
 
-                s_std = (cr >= 133) & (cr <= 173) & (cb >= 77) & (cb <= 128) & (cr > cb)
-                s_rgb = (r > 95) & (g > 40) & (b > 20) & (r > g + 3) & (r > b + 10) & (cr >= 130) & (cr > cb)
-                s_palm = (r >= 130) & (g >= 115) & (b >= 95) & (r >= g) & (r >= b + 4) & (cr >= 129) & (cr > cb)
+                s_std = (cr >= 133) & (cr <= 173) & (cb >= 77) & (cb <= 128) & (cr > cb) & (r > g) & (r - b >= 15)
+                s_rgb = (r > 95) & (g > 40) & (b > 20) & (r > g + 3) & (r - b >= 15) & (cr >= 130) & (cr > cb)
+                s_palm = (r >= 125) & (g >= 100) & (b >= 75) & (r >= g) & (r - b >= 15) & (cr >= 127) & (cr >= cb)
                 skin = s_std | s_rgb | s_palm
                 skin_pct = (np.count_nonzero(skin) / tot) * 100.0
 
@@ -511,7 +509,7 @@ def _analyze_skin_and_hands(img_or_path, img_path: Optional[str] = None) -> Dict
 
                 max_area = max(components) if components else 0
                 max_blob_ratio = max_area / tot
-                is_hand_closeup = (max_blob_ratio >= 0.22) and (skin_pct >= 28.0)
+                is_hand_closeup = (max_blob_ratio >= 0.18 and skin_pct >= 22.0) or (skin_pct >= 55.0)
                 skin_mask = skin
             else:
                 pix = list(thumb.getdata())
@@ -710,7 +708,7 @@ def _detect_indian_food_items_opencv(img, img_path: str) -> Tuple[List[str], Lis
     det_model = _get_det_model()
     if det_model is not None:
         try:
-            res_det = det_model(img_path, conf=0.20, verbose=False)[0]
+            res_det = det_model(img_path, conf=0.35, verbose=False)[0]
             for b in res_det.boxes:
                 c_name = det_model.names[int(b.cls[0])]
                 conf = float(b.conf[0])
@@ -724,12 +722,12 @@ def _detect_indian_food_items_opencv(img, img_path: str) -> Tuple[List[str], Lis
     b, g, r = cv2.split(img)
     r_i, g_i, b_i = r.astype(int), g.astype(int), b.astype(int)
     skin_mask = skin_res.get("skin_mask")
-    non_skin = (~skin_mask).astype(bool) if skin_mask is not None else np.ones((h, w), dtype=bool)
+    non_skin = (skin_mask == False) if skin_mask is not None else np.ones((h, w), dtype=bool)
 
     h_c, s_c, v_c = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
 
-    # 3. Dal / Sambar / Rasam / Lentil Stews — rich turmeric saturation & chrominance
-    dal_bool = (h_c >= 8) & (h_c <= 34) & (s_c >= 65) & (v_c >= 60) & ((r_i - b_i) >= 35) & (r_i >= g_i) & ((g_i - b_i) >= 15)
+    # 3. Dal / Sambar / Rasam / Lentil Stews — rich turmeric saturation & chrominance (strictly non-skin)
+    dal_bool = non_skin & (h_c >= 10) & (h_c <= 42) & (s_c >= 70) & (v_c >= 65) & ((r_i - b_i) >= 40) & (r_i >= g_i) & ((g_i - b_i) >= 15)
     dal_ratio = float(np.count_nonzero(dal_bool) / total_px)
 
     # 4. Green Leafy Vegetables (Palak, Gongura, Thotakura, Methi) — G strictly exceeds R and B
@@ -740,18 +738,18 @@ def _detect_indian_food_items_opencv(img, img_path: str) -> Tuple[List[str], Lis
     plate_bool = (s_c <= 22) & (v_c >= 65) & (v_c <= 220) & (np.abs(r_i - g_i) <= 6) & (np.abs(r_i - b_i) <= 6)
     plate_ratio = float(np.count_nonzero(plate_bool) / total_px)
 
-    # Food presence confirmation
-    has_food_presence = (len(yolo_food_vessels) >= 1) or (dal_ratio >= 0.025) or (green_ratio >= 0.020) or (plate_ratio >= 0.040 and dal_ratio >= 0.010)
+    # Food presence confirmation: requires genuine vessels or plate or green veg or dal in non-skin
+    has_food_presence = (len(yolo_food_vessels) >= 1) or (plate_ratio >= 0.035) or (green_ratio >= 0.015) or (dal_ratio >= 0.020)
 
     # 6. Steamed White Rice (Chawal / Anna) — neutral achromatic, bright, low saturation, non-skin
-    wr_bool = (v_c >= 165) & (s_c <= 25) & (np.abs(r_i - g_i) <= 8) & (np.abs(r_i - b_i) <= 10)
+    wr_bool = non_skin & (v_c >= 170) & (s_c <= 25) & (np.abs(r_i - g_i) <= 8) & (np.abs(r_i - b_i) <= 10)
     white_rice_ratio = float(np.count_nonzero(wr_bool) / total_px)
     if has_food_presence and white_rice_ratio >= 0.035:
         detected_dishes.append("White Rice (Steamed Rice)")
         detected_dishes.append("Cooked Rice (Chawal)")
 
     # 7. Flavored / Spiced Rice (Veg Palav / Biryani / Pulihora / Tamarind Rice / Lemon Rice / Pulagam)
-    sr_bool = (h_c >= 14) & (h_c <= 36) & (s_c >= 50) & (s_c <= 170) & (v_c >= 110) & ((r_i - b_i) >= 35)
+    sr_bool = non_skin & (h_c >= 14) & (h_c <= 36) & (s_c >= 50) & (s_c <= 170) & (v_c >= 110) & ((r_i - b_i) >= 35)
     spiced_rice_ratio = float(np.count_nonzero(sr_bool) / total_px)
     if has_food_presence and spiced_rice_ratio >= 0.040 and white_rice_ratio < 0.12:
         detected_dishes.append("Flavored / Spiced Rice (Palav / Biryani / Pulagam)")
@@ -812,15 +810,15 @@ def _detect_indian_food_items_opencv(img, img_path: str) -> Tuple[List[str], Lis
         detected_dishes.append("Aloo Kurma (Potato Curry)")
 
     # 11. Chutneys (Gongura, Tomato, Pudina, Groundnut)
-    red_chutney_bool = (h_c <= 12) & (s_c >= 80) & (v_c >= 60) & (v_c <= 230)
+    red_chutney_bool = non_skin & (h_c <= 12) & (s_c >= 80) & (v_c >= 60) & (v_c <= 230)
     red_chutney_ratio = float(np.count_nonzero(red_chutney_bool) / total_px)
-    if 0.008 <= red_chutney_ratio <= 0.06:
+    if has_food_presence and 0.008 <= red_chutney_ratio <= 0.06:
         detected_dishes.append("Chutney (Gongura / Tomato / Pudina / Groundnut)")
 
     # 12. Peanut Chikki (Snack)
-    chikki_bool = (h_c >= 10) & (h_c <= 26) & (s_c >= 80) & (s_c <= 210) & (v_c >= 45) & (v_c <= 160) & ((r_i - b_i) >= 30)
+    chikki_bool = non_skin & (h_c >= 10) & (h_c <= 26) & (s_c >= 80) & (s_c <= 210) & (v_c >= 45) & (v_c <= 160) & ((r_i - b_i) >= 30)
     chikki_ratio = float(np.count_nonzero(chikki_bool) / total_px)
-    if 0.008 <= chikki_ratio <= 0.06:
+    if has_food_presence and 0.008 <= chikki_ratio <= 0.06:
         chikki_mask = (chikki_bool.astype(np.uint8)) * 255
         chikki_pixels = cv2.bitwise_and(gray, gray, mask=chikki_mask)
         edges = cv2.Canny(chikki_pixels, 50, 150)
@@ -829,20 +827,20 @@ def _detect_indian_food_items_opencv(img, img_path: str) -> Tuple[List[str], Lis
             detected_dishes.append("Peanut Chikki (Snack)")
 
     # 13. Ragi-Java
-    ragi_bool = (v_c <= 90) & (s_c <= 35) & (np.abs(r_i - g_i) <= 10) & (np.abs(r_i - b_i) <= 10)
+    ragi_bool = non_skin & (v_c <= 90) & (s_c <= 35) & (np.abs(r_i - g_i) <= 10) & (np.abs(r_i - b_i) <= 10)
     ragi_ratio = float(np.count_nonzero(ragi_bool) / total_px)
     has_cup = any(('cup' in v.lower() or 'bowl' in v.lower() or 'bottle' in v.lower()) for v in yolo_food_vessels)
-    if (ragi_ratio >= 0.015 and has_cup) or ragi_ratio >= 0.030:
+    if (ragi_ratio >= 0.015 and has_cup) or (has_food_presence and ragi_ratio >= 0.030):
         detected_dishes.append("Ragi-Java (Nutritional Malt Drink)")
 
     # 14. Sweet Pongal / Bellam Pongali
-    pongal_bool = (h_c >= 12) & (h_c <= 28) & (s_c >= 65) & (s_c <= 180) & (v_c >= 70) & (v_c <= 190)
+    pongal_bool = non_skin & (h_c >= 12) & (h_c <= 28) & (s_c >= 65) & (s_c <= 180) & (v_c >= 70) & (v_c <= 190)
     pongal_ratio = float(np.count_nonzero(pongal_bool) / total_px)
-    if pongal_ratio >= 0.035 and white_rice_ratio < 0.12:
+    if has_food_presence and pongal_ratio >= 0.035 and white_rice_ratio < 0.12:
         detected_dishes.append("Sweet Pongal (Bellam Pongali)")
 
     # 15. Steel Dining Thali / Compartment Plate / Vessel
-    if plate_ratio >= 0.040 or len(yolo_food_vessels) >= 1:
+    if (plate_ratio >= 0.040 or len(yolo_food_vessels) >= 1) and has_food_presence:
         detected_dishes.append("Steel Thali / Dining Vessel")
 
     metrics = {
@@ -1126,32 +1124,34 @@ def food_quality_check(
 
         # 3. Precise Skin and Hand Analysis Guard
         skin_analysis = _analyze_skin_and_hands(img, image_path)
-        has_culinary_presence = (len(yolo_vessels) >= 1) or (metrics.get("dal_ratio", 0) >= 0.025) or (metrics.get("green_ratio", 0) >= 0.020) or (metrics.get("plate_ratio", 0) >= 0.040 and metrics.get("dal_ratio", 0) >= 0.010)
+        plate_found = any("thali" in d.lower() or "vessel" in d.lower() for d in detected_dishes) or len(yolo_vessels) >= 1 or metrics.get("plate_ratio", 0) >= 0.035
+        green_found = metrics.get("green_ratio", 0) >= 0.015
 
-        # Strict Hand / Palm Rejection Guard
-        if not has_culinary_presence:
-            if skin_analysis["skin_pct"] >= 25.0 or skin_analysis["is_hand_closeup"] or skin_analysis.get("max_blob_ratio", 0) >= 0.20:
-                return {
-                    "cv_status": "CV_FLAG",
-                    "cv_notes": f"Human hand/skin detected ({skin_analysis['skin_pct']:.1f}% of frame). No mid-day meal or cooking vessels visible. Photo flagged for inspection review.",
-                    "cv_confidence": 0.98,
-                    "cv_match_percentage": 0.0,
-                    "detected_items": [],
-                    "matched_items": [],
-                    "missing_items": expected_menu_items,
-                    "cv_processed_at": now
-                }
-            if not detected_dishes:
-                return {
-                    "cv_status": "CV_FLAG",
-                    "cv_notes": f"No recognizable food items or cooking vessels detected for Zone {resolved_zone} {resolved_day} menu. Flagged.",
-                    "cv_confidence": 0.88,
-                    "cv_match_percentage": 0.0,
-                    "detected_items": [],
-                    "matched_items": [],
-                    "missing_items": expected_menu_items,
-                    "cv_processed_at": now
-                }
+        # Strict Hand / Palm Rejection Guard:
+        # A close-up of a human hand/palm with no genuine tableware vessels or plates must be flagged immediately!
+        if (skin_analysis["is_hand_closeup"] or skin_analysis["skin_pct"] >= 25.0) and not plate_found and not green_found and len(yolo_vessels) == 0:
+            return {
+                "cv_status": "CV_FLAG",
+                "cv_notes": f"Human hand/skin detected ({skin_analysis['skin_pct']:.1f}% of frame). No mid-day meal or cooking vessels visible. Photo flagged for inspection review.",
+                "cv_confidence": 0.98,
+                "cv_match_percentage": 0.0,
+                "detected_items": [],
+                "matched_items": [],
+                "missing_items": expected_menu_items,
+                "cv_processed_at": now
+            }
+
+        if not detected_dishes and len(yolo_vessels) == 0 and not plate_found:
+            return {
+                "cv_status": "CV_FLAG",
+                "cv_notes": f"No recognizable food items or cooking vessels detected for Zone {resolved_zone} {resolved_day} menu. Flagged.",
+                "cv_confidence": 0.88,
+                "cv_match_percentage": 0.0,
+                "detected_items": [],
+                "matched_items": [],
+                "missing_items": expected_menu_items,
+                "cv_processed_at": now
+            }
 
         # 4. Optional Gemini Vision Multimodal Model (if API key available)
         api_key = _get_gemini_api_key()
@@ -1448,7 +1448,11 @@ def count_students_in_image(image_path: str) -> dict:
     det_model = _get_det_model() if HAS_YOLO else None
     if det_model is not None and HAS_OPENCV and img is not None and hasattr(img, "shape"):
         try:
-            results = det_model(image_path, conf=0.18, verbose=False, classes=[0], imgsz=1024, iou=0.45)
+            skin_res = _analyze_skin_and_hands(img, image_path)
+            skin_pct = skin_res.get("skin_pct", 0.0)
+            is_hand_closeup = skin_res.get("is_hand_closeup", False)
+
+            results = det_model(image_path, conf=0.25, verbose=False, classes=[0], imgsz=1024, iou=0.45)
             candidate_boxes = []
             h, w = img.shape[:2]
             total_px = max(h * w, 1)
@@ -1463,8 +1467,11 @@ def count_students_in_image(image_path: str) -> dict:
                         aspect = bw / max(bh, 1.0)
                         area_ratio = (bw * bh) / total_px
                         conf = float(box.conf[0])
-                        # Valid seated/standing student in dining hall: aspect ratio 0.15 to 2.2, area 0.0005 to 0.70
-                        if 0.15 <= aspect <= 2.2 and 0.0005 <= area_ratio <= 0.70:
+                        # Discard giant whole-frame bounding boxes caused by hand/skin/camera coverage
+                        if area_ratio > 0.40 and (aspect > 1.15 or is_hand_closeup or skin_pct >= 35.0):
+                            continue
+                        # Valid seated/standing student in dining hall: aspect ratio 0.15 to 2.2, area 0.002 to 0.50, conf >= 0.30
+                        if 0.15 <= aspect <= 2.2 and 0.002 <= area_ratio <= 0.50 and conf >= 0.30:
                             candidate_boxes.append((x1, y1, x2, y2, conf, bw * bh))
 
             candidate_boxes.sort(key=lambda b: b[4], reverse=True)
@@ -1504,7 +1511,7 @@ def count_students_in_image(image_path: str) -> dict:
     skin_pct = skin_res["skin_pct"]
     max_blob_ratio = skin_res.get("max_blob_ratio", 0)
 
-    if (max_blob_ratio >= 0.20 and skin_pct >= 28.0) or skin_res["is_hand_closeup"]:
+    if (max_blob_ratio >= 0.18 and skin_pct >= 22.0) or skin_res["is_hand_closeup"] or skin_pct >= 55.0:
         return {
             "cv_student_count": 0,
             "cv_status": "CV_FLAG",

@@ -2,11 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   X, Camera, Check, AlertCircle, RefreshCw, MapPin, Clock,
   ShieldCheck, SwitchCamera, VideoOff, Users, UtensilsCrossed,
-  Calendar, Layers, CheckCircle2, ChevronRight, UploadCloud,
-  FileImage, FolderPlus, Sparkles, Image as ImageIcon
+  Calendar, Layers, CheckCircle2, ChevronRight
 } from 'lucide-react';
 import { schoolService } from '../services/api';
-import { AP_MDM_ZONES, DAYS_OF_WEEK, getTodayDayName } from '../data/mdmMenu';
+import { AP_MDM_ZONES, DAYS_OF_WEEK } from '../data/mdmMenu';
 
 const EIGHT_ANGLES = [
   { id: 1, label: 'Front Center', desc: 'Main dining hall center rows' },
@@ -19,28 +18,27 @@ const EIGHT_ANGLES = [
   { id: 8, label: 'Wide View', desc: 'Full hall wide panoramic perspective' }
 ];
 
+// Helper: automatically get today's day of week from system date (Sunday defaults to Monday for statutory menu)
+const getAutoDayOfWeek = () => {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const today = days[new Date().getDay()];
+  return today === 'Sunday' ? 'Monday' : today;
+};
+
 export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName }) => {
   const [category, setCategory] = useState('MEAL_PREPARATION');
-  const [captureMethod, setCaptureMethod] = useState('file'); // 'file' or 'camera' (default to file for maximum device compatibility)
   
-  // AP MDM Zone & Day State for Food Inspection
+  // AP MDM Zone State (Day is automatically selected from the current date!)
   const [selectedZone, setSelectedZone] = useState(2); // Default to Zone 2 (Krishna District / Penamaluru)
-  const [selectedDay, setSelectedDay] = useState(getTodayDayName());
+  const currentDay = getAutoDayOfWeek();
 
-  // 8 Angle State for Student Count
+  // 8 Angle State for Student Count (In-App Camera Capture Only)
   const [selectedAngle, setSelectedAngle] = useState(1);
   const [capturedAnglePhotos, setCapturedAnglePhotos] = useState(new Array(8).fill(null));
 
-  const [mealType, setMealType] = useState('');
-  const [menuDescription, setMenuDescription] = useState('');
   const [staffName, setStaffName] = useState('Smt. Sudha Rani');
   const [inspectionShift, setInspectionShift] = useState('Lunch Serving');
   const [hygieneNotes, setHygieneNotes] = useState('');
-
-  // File Input Refs
-  const singleFileInputRef = useRef(null);
-  const batchFileInputRef = useRef(null);
-  const angleFileInputRef = useRef(null);
 
   // Camera & Stream State
   const videoRef = useRef(null);
@@ -67,9 +65,9 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Current Zone Menu Data
+  // Current Zone Menu Data based on automatically resolved Day
   const currentZoneData = AP_MDM_ZONES[selectedZone] || AP_MDM_ZONES[2];
-  const currentDayMenu = currentZoneData.schedule[selectedDay] || currentZoneData.schedule['Monday'];
+  const currentDayMenu = currentZoneData.schedule[currentDay] || currentZoneData.schedule['Monday'];
 
   // Fetch Geolocation when modal opens
   useEffect(() => {
@@ -90,7 +88,6 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
           });
         },
         (error) => {
-          console.warn("Geolocation warning:", error.message);
           setLocationData({
             latitude: 16.4674,
             longitude: 80.7098,
@@ -123,23 +120,22 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        videoRef.current.play().catch(() => {});
       }
       setCameraActive(true);
     } catch (err) {
-      console.error("Camera access error:", err);
+      console.warn("Primary camera access error, trying fallback:", err);
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          videoRef.current.play();
+          videoRef.current.play().catch(() => {});
         }
         setCameraActive(true);
       } catch (fallbackErr) {
         setCameraActive(false);
-        setCameraError('Camera unavailable or permission denied. Switched to device photo upload.');
-        setCaptureMethod('file');
+        setCameraError('Unable to access camera. Please allow camera permissions in your browser to capture photos.');
       }
     }
   };
@@ -153,9 +149,9 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
     setCameraActive(false);
   };
 
-  // Sync camera when modal opens in camera mode
+  // Keep camera running while modal is open
   useEffect(() => {
-    if (isOpen && captureMethod === 'camera') {
+    if (isOpen) {
       if (category === 'STUDENT_EATING' || !singlePreviewUrl) {
         startCamera(facingMode);
       } else {
@@ -165,7 +161,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
       stopCamera();
     }
     return () => stopCamera();
-  }, [isOpen, captureMethod, category, singlePreviewUrl]);
+  }, [isOpen, category, singlePreviewUrl]);
 
   // Toggle Camera Front/Back
   const toggleFacingMode = () => {
@@ -184,7 +180,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
       canvas.height = height;
       const ctx = canvas.getContext('2d');
 
-      // 1. Draw raw image
+      // 1. Draw raw camera frame
       ctx.drawImage(imageSource, 0, 0, width, height);
 
       // 2. Prepare timestamp and location strings
@@ -202,7 +198,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
       const curAngleObj = customAngle || (EIGHT_ANGLES.find((a) => a.id === selectedAngle) || EIGHT_ANGLES[0]);
       const categoryLabel =
         category === 'MEAL_PREPARATION'
-          ? `MEAL PREPARATION • ZONE ${selectedZone} (${selectedDay.toUpperCase()})`
+          ? `MEAL PREPARATION • ZONE ${selectedZone} (${currentDay.toUpperCase()})`
           : category === 'KITCHEN_HYGIENE'
           ? 'KITCHEN HYGIENE INSPECTION'
           : `STUDENT ATTENDANCE [Angle ${curAngleObj.id}/8: ${curAngleObj.label}]`;
@@ -277,7 +273,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
   };
 
   // ─────────────────────────────────────────────────────────────
-  // Photo Capture from Live Video
+  // Capture Photo from Camera Viewfinder
   // ─────────────────────────────────────────────────────────────
   const captureFromVideo = async () => {
     if (!videoRef.current) return;
@@ -305,7 +301,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
         return updated;
       });
 
-      // Auto-advance angle
+      // Automatically advance to the next uncaptured angle
       setCapturedAnglePhotos((currentArr) => {
         const nextEmptyIndex = currentArr.findIndex((slot, i) => i !== (selectedAngle - 1) && !slot);
         if (nextEmptyIndex !== -1) {
@@ -323,114 +319,6 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
     }
   };
 
-  // ─────────────────────────────────────────────────────────────
-  // Photo Upload from Local File (Single Mode)
-  // ─────────────────────────────────────────────────────────────
-  const handleSingleFileUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = async () => {
-        const width = img.naturalWidth || 1280;
-        const height = img.naturalHeight || 720;
-        const result = await stampImageAndCreateBlob(img, width, height);
-        if (result) {
-          setSingleCapturedBlob(result.blob);
-          setSinglePreviewUrl(result.url);
-          setSingleMeta(result.meta);
-        }
-      };
-      img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
-    // Reset file input so re-selecting same file fires onChange
-    e.target.value = '';
-  };
-
-  // ─────────────────────────────────────────────────────────────
-  // Photo Upload for Specific Angle Slot
-  // ─────────────────────────────────────────────────────────────
-  const handleSlotFileUpload = (e, angleIdx) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const angleObj = EIGHT_ANGLES[angleIdx];
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = async () => {
-        const width = img.naturalWidth || 1280;
-        const height = img.naturalHeight || 720;
-        const result = await stampImageAndCreateBlob(img, width, height, angleObj);
-        if (result) {
-          setCapturedAnglePhotos((prev) => {
-            const updated = [...prev];
-            if (updated[angleIdx]?.previewUrl) {
-              URL.revokeObjectURL(updated[angleIdx].previewUrl);
-            }
-            updated[angleIdx] = {
-              blob: result.blob,
-              previewUrl: result.url,
-              meta: result.meta,
-              angleId: angleObj.id,
-              angleLabel: angleObj.label
-            };
-            return updated;
-          });
-          // Auto select next empty angle
-          if (angleIdx + 1 < 8) setSelectedAngle(angleIdx + 2);
-        }
-      };
-      img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
-
-  // ─────────────────────────────────────────────────────────────
-  // Batch Upload All 8 Angles from Multiple Files
-  // ─────────────────────────────────────────────────────────────
-  const handleBatchFilesUpload = (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    files.forEach((file, idx) => {
-      if (idx >= 8) return;
-      const angleObj = EIGHT_ANGLES[idx];
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = async () => {
-          const width = img.naturalWidth || 1280;
-          const height = img.naturalHeight || 720;
-          const result = await stampImageAndCreateBlob(img, width, height, angleObj);
-          if (result) {
-            setCapturedAnglePhotos((prev) => {
-              const updated = [...prev];
-              if (updated[idx]?.previewUrl) {
-                URL.revokeObjectURL(updated[idx].previewUrl);
-              }
-              updated[idx] = {
-                blob: result.blob,
-                previewUrl: result.url,
-                meta: result.meta,
-                angleId: angleObj.id,
-                angleLabel: angleObj.label
-              };
-              return updated;
-            });
-          }
-        };
-        img.src = event.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
-    e.target.value = '';
-  };
-
   // Retake photo for single mode
   const handleSingleRetake = () => {
     if (singlePreviewUrl) {
@@ -439,9 +327,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
     setSinglePreviewUrl(null);
     setSingleCapturedBlob(null);
     setSingleMeta(null);
-    if (captureMethod === 'camera') {
-      startCamera(facingMode);
-    }
+    startCamera(facingMode);
   };
 
   // Clear specific angle in multi-angle mode
@@ -483,12 +369,12 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
 
     if (category === 'STUDENT_EATING') {
       if (!isEightAnglesReady) {
-        setErrorMsg(`All 8 angle images must be uploaded/captured before submission. Currently uploaded: ${capturedAnglesCount} / 8.`);
+        setErrorMsg(`All 8 angle images must be captured before submission. Currently captured: ${capturedAnglesCount} / 8.`);
         return;
       }
     } else {
       if (!singleCapturedBlob) {
-        setErrorMsg('Please select or capture an image before submitting.');
+        setErrorMsg('Please capture a photo using the live camera before submitting.');
         return;
       }
     }
@@ -536,13 +422,13 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
 
         if (category === 'MEAL_PREPARATION') {
           formData.append('zone', selectedZone.toString());
-          formData.append('day_of_week', selectedDay);
-          formData.append('meal_type', `Zone ${selectedZone} - ${selectedDay} Menu`);
-          const officialDesc = `[Zone ${selectedZone}: ${selectedDay}] ${currentDayMenu.title} (${currentDayMenu.items.join(', ')})`;
-          formData.append('menu_description', menuDescription.trim() ? `${officialDesc} • Note: ${menuDescription.trim()}` : officialDesc);
+          formData.append('day_of_week', currentDay);
+          formData.append('meal_type', `Zone ${selectedZone} - ${currentDay} Menu`);
+          const officialDesc = `[Zone ${selectedZone}: ${currentDay}] ${currentDayMenu.title} (${currentDayMenu.items.join(', ')})`;
+          formData.append('menu_description', officialDesc);
         } else {
           formData.append('meal_type', 'Kitchen Cleanliness & Hygiene');
-          formData.append('menu_description', menuDescription || 'Sanitation and hygiene verification');
+          formData.append('menu_description', 'Sanitation and hygiene verification');
         }
 
         formData.append('staff_name', staffName.trim());
@@ -558,7 +444,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
         await schoolService.uploadMealImage(formData);
         setSuccessMsg(
           category === 'MEAL_PREPARATION'
-            ? `Photo stamped & submitted! Automated match verification against Zone ${selectedZone} (${selectedDay}) menu in progress.`
+            ? `Photo stamped & submitted! Automated match verification against Zone ${selectedZone} (${currentDay}) menu in progress.`
             : 'Kitchen hygiene photo stamped & submitted for inspection review.'
         );
       }
@@ -567,10 +453,10 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
 
       setTimeout(() => {
         handleCloseModal();
-      }, 1200);
+      }, 1000);
     } catch (err) {
       console.error("Submission error:", err);
-      setErrorMsg(err.response?.data?.detail || 'Failed to submit inspection capture. Please try again.');
+      setErrorMsg(err.response?.data?.detail || 'Failed to submit in-app capture. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -592,16 +478,16 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900">
-                School Field Node • Photo Inspection & Attendance
+                In-App Camera Capture • Mid-Day Meal Inspection
               </h2>
               <p className="text-xs text-slate-500">
-                Statutory Mid-Day Meal Menu & 8-Angle Student Attendance Headcount
+                Live Camera Capture Only • Automatic Date & Geo-Verification
               </p>
             </div>
           </div>
           <button
             onClick={handleCloseModal}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -665,7 +551,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
               </button>
             </div>
 
-            {/* MEAL PREPARATION - Zone Selector & 2025 Menu Card */}
+            {/* MEAL PREPARATION - Zone Selector (Day auto-selected from date!) */}
             {category === 'MEAL_PREPARATION' && (
               <div className="mt-2.5 p-3 rounded-lg bg-teal-50/70 border border-teal-200 space-y-2.5">
                 <div className="flex items-center justify-between flex-wrap gap-2">
@@ -674,20 +560,10 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                     <span>Select School MDM Zone (2025 Revised):</span>
                   </span>
 
-                  {/* Day Picker */}
-                  <div className="flex items-center space-x-1 bg-white border border-teal-200 rounded-md px-2 py-0.5">
-                    <Calendar className="w-3 h-3 text-teal-600" />
-                    <select
-                      value={selectedDay}
-                      onChange={(e) => setSelectedDay(e.target.value)}
-                      className="bg-transparent text-[11px] font-bold text-teal-900 focus:outline-none cursor-pointer"
-                    >
-                      {DAYS_OF_WEEK.map((d) => (
-                        <option key={d} value={d}>
-                          {d} {d === getTodayDayName() ? '(Today)' : ''}
-                        </option>
-                      ))}
-                    </select>
+                  {/* Day Auto-Selected Badge (No manual selection dropdown) */}
+                  <div className="flex items-center space-x-1.5 bg-teal-800 text-white font-bold rounded-md px-2.5 py-1 text-[11px] shadow-2xs">
+                    <Calendar className="w-3.5 h-3.5 text-teal-200" />
+                    <span>{currentDay} (Today's Statutory Diet)</span>
                   </div>
                 </div>
 
@@ -721,7 +597,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-teal-950 flex items-center space-x-1">
                       <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
-                      <span>{currentZoneData.name} • {selectedDay} Mandatory Diet</span>
+                      <span>{currentZoneData.name} • {currentDay} Mandatory Menu</span>
                     </span>
                     <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded border border-amber-300">
                       AI % Match Target
@@ -747,46 +623,25 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
               </div>
             )}
 
-            {/* STUDENT COUNT - 8 Angle Requirement & Slots Gallery */}
+            {/* STUDENT COUNT - 8 Angle Requirement (Camera Capture Only) */}
             {category === 'STUDENT_EATING' && (
               <div className="mt-2.5 p-3 rounded-lg bg-teal-50 border border-teal-200 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-1.5 text-xs font-bold text-teal-900">
                     <Users className="w-4 h-4 text-teal-700 shrink-0" />
-                    <span>Upload min 8 images from 8 different angles</span>
+                    <span>Capture min 8 images from 8 different angles</span>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    {/* Batch Select 8 Photos from Device */}
-                    <button
-                      type="button"
-                      onClick={() => batchFileInputRef.current?.click()}
-                      className="px-2.5 py-1 rounded bg-teal-700 hover:bg-teal-800 text-white text-[10px] font-bold flex items-center space-x-1 shadow-2xs cursor-pointer transition-colors"
-                      title="Select multiple images from device to fill the 8 angles"
-                    >
-                      <FolderPlus className="w-3.5 h-3.5" />
-                      <span>Select 8 Photos from Device</span>
-                    </button>
-                    <input
-                      ref={batchFileInputRef}
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleBatchFilesUpload}
-                    />
-
-                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                      isEightAnglesReady
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-amber-500 text-white'
-                    }`}>
-                      {capturedAnglesCount} of 8 Uploaded
-                    </span>
-                  </div>
+                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                    isEightAnglesReady
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-amber-500 text-white'
+                  }`}>
+                    {capturedAnglesCount} of 8 Captured
+                  </span>
                 </div>
                 
                 <p className="text-[11px] text-teal-800 leading-snug">
-                  Photograph or select dining hall photos from all 8 designated angles. Click any card below to pick a photo for that angle, or use the batch button above:
+                  Photograph the student dining hall from all 8 designated angles using the in-app camera:
                 </p>
 
                 {/* 8 Angle Selector Pills */}
@@ -824,7 +679,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                 <div className="pt-1">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[10px] font-bold text-teal-900">
-                      8-Angle Gallery ({capturedAnglesCount}/8 ready):
+                      8-Angle Camera Captures ({capturedAnglesCount}/8 ready):
                     </span>
                   </div>
                   <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
@@ -853,26 +708,24 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                                 <button
                                   type="button"
                                   onClick={() => handleRetakeAngle(idx)}
-                                  className="text-rose-300 hover:text-white px-1 font-bold"
-                                  title="Remove/replace this angle"
+                                  className="text-rose-300 hover:text-white px-1 font-bold cursor-pointer"
+                                  title="Retake this angle"
                                 >
                                   ✕
                                 </button>
                               </div>
                             </>
                           ) : (
-                            <label className="w-full h-full flex flex-col items-center justify-center p-1 text-center cursor-pointer hover:bg-teal-50">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAngle(ang.id)}
+                              className="w-full h-full flex flex-col items-center justify-center p-1 text-center cursor-pointer hover:bg-teal-50"
+                            >
                               <Camera className="w-3.5 h-3.5 text-slate-400 mb-0.5" />
                               <span className="text-[8px] text-slate-600 font-bold truncate max-w-full">
                                 #{ang.id} {ang.label.split(' ')[0]}
                               </span>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={(e) => handleSlotFileUpload(e, idx)}
-                              />
-                            </label>
+                            </button>
                           )}
                         </div>
                       );
@@ -895,36 +748,18 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
           </div>
 
           {/* ───────────────────────────────────────────────────────────── */}
-          {/* Method Switcher: File Upload vs Live Camera */}
+          {/* Live In-App Camera Viewfinder ONLY (No file upload) */}
           {/* ───────────────────────────────────────────────────────────── */}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => { setCaptureMethod('file'); stopCamera(); }}
-                  className={`px-3 py-1 rounded-md font-semibold text-xs transition-colors flex items-center space-x-1.5 cursor-pointer ${
-                    captureMethod === 'file'
-                      ? 'bg-teal-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <UploadCloud className="w-3.5 h-3.5" />
-                  <span>Upload from Device</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setCaptureMethod('camera'); startCamera(facingMode); }}
-                  className={`px-3 py-1 rounded-md font-semibold text-xs transition-colors flex items-center space-x-1.5 cursor-pointer ${
-                    captureMethod === 'camera'
-                      ? 'bg-teal-600 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Camera className="w-3.5 h-3.5" />
-                  <span>Live Camera Capture</span>
-                </button>
-              </div>
+              <label className="font-semibold text-slate-700 flex items-center space-x-1.5">
+                <Camera className="w-3.5 h-3.5 text-teal-600" />
+                <span>
+                  {category === 'STUDENT_EATING'
+                    ? `Live Camera — Capturing [Angle ${currentAngleObj.id}/8: ${currentAngleObj.label}]`
+                    : 'Camera Viewfinder (Direct In-App Capture)'}
+                </span>
+              </label>
 
               {/* GPS indicator pill */}
               <div className="flex items-center space-x-1 text-[11px] text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200">
@@ -933,8 +768,8 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
               </div>
             </div>
 
-            {/* Viewfinder / File Upload Box */}
-            <div className="relative w-full h-72 sm:h-80 bg-slate-950 rounded-xl border border-slate-300 overflow-hidden flex flex-col items-center justify-center">
+            {/* Viewfinder Window */}
+            <div className="relative w-full h-72 sm:h-84 bg-slate-950 rounded-xl border border-slate-300 overflow-hidden flex flex-col items-center justify-center">
               
               {/* Single photo preview (for Meal Prep / Hygiene) */}
               {category !== 'STUDENT_EATING' && singlePreviewUrl ? (
@@ -954,66 +789,8 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                     className="absolute top-3 right-3 px-3 py-1.5 rounded-md bg-white/95 hover:bg-white text-slate-800 text-xs font-semibold border border-slate-200 shadow-xs flex items-center space-x-1 transition-all cursor-pointer"
                   >
                     <RefreshCw className="w-3.5 h-3.5 text-teal-600" />
-                    <span>Change Photo</span>
+                    <span>Retake Photo</span>
                   </button>
-                </div>
-              ) : captureMethod === 'file' ? (
-                /* FILE UPLOAD DROPZONE */
-                <div className="w-full h-full bg-slate-900/90 flex flex-col items-center justify-center p-6 text-center space-y-3">
-                  <div className="w-14 h-14 rounded-full bg-teal-900/60 border border-teal-500/40 flex items-center justify-center text-teal-400">
-                    <UploadCloud className="w-7 h-7" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-white">
-                      {category === 'STUDENT_EATING'
-                        ? `Upload photo for [Angle ${currentAngleObj.id}: ${currentAngleObj.label}]`
-                        : `Select ${category === 'MEAL_PREPARATION' ? 'Meal' : 'Hygiene'} Photo from Device`}
-                    </p>
-                    <p className="text-xs text-slate-300 mt-1 max-w-md mx-auto">
-                      Supports JPG, PNG, WEBP. The official AP Govt geo-tag, timestamp, and menu verification watermark will be stamped automatically.
-                    </p>
-                  </div>
-
-                  {category === 'STUDENT_EATING' ? (
-                    <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-                      <label className="px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer">
-                        <Camera className="w-4 h-4" />
-                        <span>Choose Photo for Angle #{currentAngleObj.id}</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => handleSlotFileUpload(e, selectedAngle - 1)}
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => batchFileInputRef.current?.click()}
-                        className="px-4 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-teal-500/30 text-teal-200 text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
-                      >
-                        <FolderPlus className="w-4 h-4" />
-                        <span>Select All 8 Photos at Once</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="pt-1">
-                      <label className="px-5 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer">
-                        <FileImage className="w-4 h-4" />
-                        <span>Browse / Select Inspection Photo</span>
-                        <input
-                          ref={singleFileInputRef}
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleSingleFileUpload}
-                        />
-                      </label>
-                    </div>
-                  )}
-
-                  <div className="text-[10px] text-slate-400 font-mono">
-                    Node: {schoolName || 'ZPHS Penamaluru'} • GPS Auto-Burn Enabled
-                  </div>
                 </div>
               ) : cameraActive ? (
                 /* LIVE CAMERA VIEW */
@@ -1037,7 +814,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                       <button
                         type="button"
                         onClick={toggleFacingMode}
-                        className="p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-xs border border-white/20 transition-colors shadow-xs"
+                        className="p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-xs border border-white/20 transition-colors shadow-xs cursor-pointer"
                         title="Switch Front/Rear Camera"
                       >
                         <SwitchCamera className="w-3.5 h-3.5 text-white" />
@@ -1051,7 +828,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                       </div>
                     ) : (
                       <div className="px-2.5 py-1 rounded-md bg-teal-900/90 text-teal-200 border border-teal-500/50 text-[10px] font-bold shadow-xs pointer-events-auto">
-                        AP MDM Zone {selectedZone} ({selectedDay})
+                        AP MDM Zone {selectedZone} ({currentDay})
                       </div>
                     )}
                   </div>
@@ -1091,30 +868,20 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-white">
-                      {cameraError || 'Camera Access Not Active'}
+                      {cameraError || 'Camera Access Required'}
                     </p>
                     <p className="text-xs text-slate-300 mt-1 max-w-sm mx-auto">
-                      You can use direct device photo upload instead to submit images instantly.
+                      Direct in-app capture only. Please allow camera access in your browser to proceed with photo inspection.
                     </p>
                   </div>
-                  <div className="flex items-center justify-center space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => setCaptureMethod('file')}
-                      className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold inline-flex items-center space-x-1.5 transition-colors cursor-pointer"
-                    >
-                      <UploadCloud className="w-3.5 h-3.5" />
-                      <span>Use Device Photo Upload</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => startCamera(facingMode)}
-                      className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold inline-flex items-center space-x-1.5 transition-colors cursor-pointer"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Retry Camera</span>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => startCamera(facingMode)}
+                    className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold inline-flex items-center space-x-1.5 transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Activate Camera</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -1170,10 +937,10 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
             <span className="text-[11px] text-slate-500">
               {category === 'STUDENT_EATING' ? (
                 isEightAnglesReady
-                  ? 'All 8 angle images ready ✓'
-                  : `Upload ${capturedAnglesCount} / 8 angles to unlock submit`
+                  ? 'All 8 angle images captured ✓'
+                  : `Capture ${capturedAnglesCount} / 8 angles to unlock submit`
               ) : (
-                singleCapturedBlob ? 'Photo ready & stamped ✓' : 'Photo required'
+                singleCapturedBlob ? 'Photo captured & stamped ✓' : 'Camera capture required'
               )}
             </span>
 
@@ -1187,7 +954,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                 Cancel
               </button>
               
-              {/* STRICT REQUIREMENT: Submit button ONLY appears when all 8 images are uploaded for Student Eating! */}
+              {/* STRICT REQUIREMENT: Submit button ONLY appears when all 8 images are captured for Student Eating! */}
               {category === 'STUDENT_EATING' ? (
                 isEightAnglesReady ? (
                   <button
@@ -1210,7 +977,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                 ) : (
                   <div className="px-4 py-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-xs font-bold flex items-center space-x-1.5 shadow-2xs">
                     <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                    <span>Submit locked ({capturedAnglesCount}/8 ready)</span>
+                    <span>Submit locked ({capturedAnglesCount}/8 captured)</span>
                   </div>
                 )
               ) : (

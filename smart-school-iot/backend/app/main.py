@@ -22,7 +22,9 @@ Base.metadata.create_all(bind=engine)
 
 import tempfile
 _tmp_dir = "/tmp" if os.name != "nt" else tempfile.gettempdir()
-UPLOAD_DIR = os.getenv("UPLOAD_DIR", os.path.join(_tmp_dir, "uploads") if os.getenv("VERCEL") else "uploads")
+_backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_default_uploads = os.path.join(_tmp_dir, "uploads") if os.getenv("VERCEL") else os.path.join(_backend_dir, "uploads")
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", _default_uploads)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = FastAPI(

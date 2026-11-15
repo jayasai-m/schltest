@@ -15,6 +15,25 @@ import {
   XCircle
 } from 'lucide-react';
 
+const formatSubmissionDate = (dt) => {
+  if (!dt) return 'Recently';
+  try {
+    const clean = typeof dt === 'string' ? dt.replace(' ', 'T') : dt;
+    const d = new Date(clean);
+    if (isNaN(d.getTime())) return String(dt);
+    return d.toLocaleString('en-IN', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch {
+    return String(dt);
+  }
+};
+
 export const SchoolMeals = () => {
   const [data, setData] = useState({ meals: [], images: [], latest_sensor: null });
   const [loading, setLoading] = useState(true);
@@ -48,7 +67,7 @@ export const SchoolMeals = () => {
 
   useEffect(() => {
     fetchMeals();
-    const interval = setInterval(fetchMeals, 5000);
+    const interval = setInterval(fetchMeals, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -415,7 +434,7 @@ export const SchoolMeals = () => {
                   </div>
 
                   <div className="p-3 border-t border-slate-100 bg-slate-50/50 text-[10px] text-slate-500 font-mono">
-                    Submitted: {new Date(img.created_at).toLocaleString()}
+                    Submitted: {formatSubmissionDate(img.created_at || img.captured_timestamp)}
                   </div>
                 </div>
               );
