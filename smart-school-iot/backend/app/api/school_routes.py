@@ -429,27 +429,16 @@ def upload_school_image(
             if session is None:
                 _db.close()
 
-    # Launch CV analysis
+    # Launch CV analysis synchronously so results are immediately returned and persisted
     abs_file_path = os.path.abspath(file_path)
-    is_serverless = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
     if category in ["MEAL_PREPARATION", "STUDENT_EATING"]:
-        if is_serverless:
-            # Serverless containers freeze background threads upon HTTP response.
-            # Execute synchronously so CV results are persisted immediately.
-            run_cv_analysis(abs_file_path, submission_id, category, menu_text, clean_angle_num, clean_zone, clean_day, session=db)
-            db.refresh(submission)
-        else:
-            t = threading.Thread(
-                target=run_cv_analysis,
-                args=(abs_file_path, submission_id, category, menu_text, clean_angle_num, clean_zone, clean_day),
-                daemon=True
-            )
-            t.start()
+        run_cv_analysis(abs_file_path, submission_id, category, menu_text, clean_angle_num, clean_zone, clean_day, session=db)
+        db.refresh(submission)
     
     log_audit(
         db=db,
         action="IMAGE_UPLOADED",
-        details=f"Photo uploaded for {category}: {file.filename} (CV analysis {'completed' if is_serverless else 'queued' if category != 'KITCHEN_HYGIENE' else 'N/A — manual review'})",
+        details=f"Photo uploaded for {category}: {file.filename} (CV analysis {'completed' if category != 'KITCHEN_HYGIENE' else 'N/A — manual review'})",
         user_email=current_user.email,
         school_id=current_user.school_id,
         user_id=current_user.id
@@ -457,9 +446,9 @@ def upload_school_image(
     
     cv_info = ""
     if category == "MEAL_PREPARATION":
-        cv_info = " CV food quality check against AP MDM Zone Menu completed." if is_serverless else " CV food quality check against AP MDM Zone Menu is running in background."
+        cv_info = " CV food quality check against AP MDM Zone Menu completed."
     elif category == "STUDENT_EATING":
-        cv_info = " CV student count completed." if is_serverless else " CV student count is running in background."
+        cv_info = " CV student count completed."
     
     return {
         "status": "success",
@@ -600,30 +589,23 @@ def upload_student_batch(
         created_submissions.append(sub)
         to_process.append((sub, os.path.abspath(f_path), angle_num))
 
-    # Run CV analysis for each angle
+    # Run CV analysis for each angle synchronously so headcounts are immediately persisted
     for sub, abs_p, angle_num in to_process:
-        if is_serverless:
-            # Serverless containers freeze background threads upon HTTP response.
-            # Execute synchronously so student headcounts are persisted immediately.
-            _run_single_cv(abs_p, sub.id, angle_num, session=db)
-            db.refresh(sub)
-        else:
-            t = threading.Thread(target=_run_single_cv, args=(abs_p, sub.id, angle_num), daemon=True)
-            t.start()
+        _run_single_cv(abs_p, sub.id, angle_num, session=db)
+        db.refresh(sub)
 
     log_audit(
         db=db,
         action="STUDENT_BATCH_UPLOADED",
-        details=f"Uploaded {len(created_submissions)} angle images for student attendance headcount (CV {'completed' if is_serverless else 'queued'}).",
+        details=f"Uploaded {len(created_submissions)} angle images for student attendance headcount (CV completed).",
         user_email=current_user.email,
         school_id=current_user.school_id,
         user_id=current_user.id
     )
 
-    msg_suffix = "AI student headcount completed successfully." if is_serverless else "AI student headcount is processing in background."
     return {
         "status": "success",
-        "message": f"Successfully uploaded all {len(created_submissions)} angle photos. {msg_suffix}",
+        "message": f"Successfully uploaded all {len(created_submissions)} angle photos. AI student headcount completed successfully.",
         "count": len(created_submissions),
         "images": created_submissions
     }
