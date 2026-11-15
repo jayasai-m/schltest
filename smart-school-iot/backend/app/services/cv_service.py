@@ -874,9 +874,6 @@ def food_quality_check(
     5. Computes exact Statutory Match Percentage against the official AP MDM Zone Menu for the day.
     6. Integrates Gemini Multimodal Vision if API key is provided.
     """
-    import cv2
-    import numpy as np
-
     now = datetime.utcnow().isoformat()
     image_path = os.path.abspath(image_path)
 
