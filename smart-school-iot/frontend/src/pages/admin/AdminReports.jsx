@@ -207,7 +207,7 @@ export const AdminReports = () => {
           >
             <option value="">All Categories</option>
             <option value="MEAL_PREPARATION">Meal Preparation</option>
-            <option value="STUDENT_EATING">Students Eating</option>
+            <option value="STUDENT_EATING">Students Eating (Min 8 Angles)</option>
             <option value="KITCHEN_HYGIENE">Kitchen Hygiene</option>
           </select>
         </div>
@@ -372,7 +372,7 @@ export const AdminReports = () => {
                       u.category === 'MEAL_PREPARATION'
                         ? 'Meal Prep'
                         : u.category === 'STUDENT_EATING'
-                        ? 'Students Eating'
+                        ? 'Students Eating (Min 8 Angles)'
                         : 'Kitchen Hygiene';
 
                     return (

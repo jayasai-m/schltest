@@ -28,8 +28,10 @@ class ImageSubmission(Base):
     uploaded_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     meal_submission_id = Column(Integer, ForeignKey("meal_submissions.id"), nullable=True)
     
-    category = Column(String(50), nullable=False) # "MEAL_PREPARATION" or "KITCHEN_HYGIENE"
-    image_url = Column(String(255), nullable=False) # static path to uploaded file
+    category = Column(String(50), nullable=False) # "MEAL_PREPARATION", "KITCHEN_HYGIENE", "STUDENT_EATING"
+    image_url = Column(String(255), nullable=False) # static path to uploaded file or thumbnail
+    video_url = Column(String(255), nullable=True) # static path to recorded video file (for in-app video attendance)
+    media_type = Column(String(50), default="image", nullable=True) # "image" or "video"
     file_name = Column(String(255), nullable=False)
     
     # Metadata submitted alongside image
@@ -59,6 +61,7 @@ class ImageSubmission(Base):
     cv_processed_at = Column(DateTime, nullable=True)
     # For STUDENT_EATING category — person count from YOLOv8
     cv_student_count = Column(Integer, nullable=True)
+    cv_match_percentage = Column(Float, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
 

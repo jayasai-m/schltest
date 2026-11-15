@@ -361,6 +361,8 @@ def get_admin_meals(
             "uploaded_by_user_id": img.uploaded_by_user_id,
             "category": img.category,
             "image_url": img.image_url,
+            "video_url": getattr(img, "video_url", None),
+            "media_type": getattr(img, "media_type", "image") or "image",
             "file_name": img.file_name,
             "meal_type": img.meal_type,
             "menu_description": img.menu_description,
@@ -379,6 +381,7 @@ def get_admin_meals(
             "cv_status": img.cv_status,
             "cv_notes": img.cv_notes,
             "cv_confidence": img.cv_confidence,
+            "cv_match_percentage": img.cv_match_percentage,
             "cv_student_count": img.cv_student_count,
             "cv_processed_at": img.cv_processed_at,
             "created_at": img.created_at

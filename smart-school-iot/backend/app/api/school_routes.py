@@ -198,7 +198,7 @@ def submit_meal(
 
 @router.post("/upload-image")
 def upload_school_image(
-    category: str = Form(...), # MEAL_PREPARATION, KITCHEN_HYGIENE, or STUDENT_EATING
+    category: str = Form(...), # MEAL_PREPARATION, KITCHEN_HYGIENE, STUDENT_EATING
     meal_type: Optional[str] = Form(None),
     menu_description: Optional[str] = Form(None),
     staff_name: Optional[str] = Form(None),
@@ -210,17 +210,23 @@ def upload_school_image(
     location_text: Optional[str] = Form(None),
     captured_timestamp: Optional[str] = Form(None),
     timestamp: Optional[str] = Form(None),
+    zone: Optional[int] = Form(None),
+    day_of_week: Optional[str] = Form(None),
+    angle_number: Optional[int] = Form(None),
+    angle_name: Optional[str] = Form(None),
+    client_student_count: Optional[int] = Form(None),
     file: UploadFile = File(...),
+    thumbnail: Optional[UploadFile] = None,
     request: Request = None,
     current_user: User = Depends(require_school),
     db: Session = Depends(get_db)
 ):
     """
-    Accepts staff in-app camera captures for 3 categories:
-      - MEAL_PREPARATION  → Gemini Vision CV checks food vs menu (auto-flag/pass)
-      - KITCHEN_HYGIENE   → No CV, stored for manual admin review
-      - STUDENT_EATING    → YOLOv8 CV counts approximate students in frame
-    All photos must be live camera captures with burned-in GPS + timestamp.
+    Accepts staff in-app camera captures for:
+      - MEAL_PREPARATION    → Gemini Vision CV checks food vs menu (auto-flag/pass)
+      - KITCHEN_HYGIENE     → Stored for manual admin review
+      - STUDENT_EATING      → YOLOv8 CV counts students in photo (Min 8 images from 8 different angles)
+    All submissions must be live in-app captures with burned-in GPS + timestamp.
     """
     VALID_CATEGORIES = ["MEAL_PREPARATION", "KITCHEN_HYGIENE", "STUDENT_EATING"]
     if category not in VALID_CATEGORIES:
@@ -231,11 +237,10 @@ def upload_school_image(
         
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     
-    file_ext = os.path.splitext(file.filename)[1].lower() if file.filename else ".jpg"
-    if not file_ext or file_ext not in [".jpg", ".jpeg", ".png", ".webp"]:
-        file_ext = ".jpg"
-        
-    unique_filename = f"img_{current_user.school_id}_{uuid.uuid4().hex[:12]}{file_ext}"
+    orig_ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+    file_ext = orig_ext if orig_ext in [".jpg", ".jpeg", ".png", ".webp"] else ".jpg"
+    unique_prefix = f"img_{current_user.school_id}_{uuid.uuid4().hex[:12]}"
+    unique_filename = f"{unique_prefix}{file_ext}"
     file_path = os.path.join(UPLOAD_DIR, unique_filename)
     
     with open(file_path, "wb") as buffer:
@@ -243,38 +248,92 @@ def upload_school_image(
         
     image_url = f"/uploads/{unique_filename}"
     
-    # Store submission — cv fields start as None/PENDING
+    # Sanitize Form defaults if called directly or by test harness
+    def _clean_str(v, fallback=None):
+        if v is None or hasattr(v, 'default'):
+            return fallback
+        return str(v)
+
+    def _clean_float(v):
+        if v is None or hasattr(v, 'default'):
+            return None
+        try:
+            return float(v)
+        except Exception:
+            return None
+
+    def _clean_int(v):
+        if v is None or hasattr(v, 'default'):
+            return None
+        try:
+            return int(v)
+        except Exception:
+            return None
+
+    clean_meal_type = _clean_str(meal_type)
+    clean_menu_desc = _clean_str(menu_description)
+    clean_staff = _clean_str(staff_name)
+    clean_shift = _clean_str(inspection_shift, "Morning Prep")
+    clean_hygiene = _clean_str(hygiene_notes)
+    clean_lat = _clean_float(latitude)
+    clean_lon = _clean_float(longitude)
+    clean_loc = _clean_str(captured_location) or _clean_str(location_text) or "Geo-Stamp Verified"
+    clean_time = _clean_str(captured_timestamp) or _clean_str(timestamp) or datetime.utcnow().isoformat()
+    clean_angle_num = _clean_int(angle_number)
+    clean_angle_name = _clean_str(angle_name)
+    clean_client_cnt = _clean_int(client_student_count)
+    clean_zone = _clean_int(zone)
+    clean_day = _clean_str(day_of_week)
+
+    # If angle details provided for STUDENT_EATING, augment description
+    if category == "STUDENT_EATING" and clean_angle_num:
+        angle_tag = f"[Angle {clean_angle_num}/8: {clean_angle_name or 'Dining View'}]"
+        if clean_menu_desc:
+            clean_menu_desc = f"{angle_tag} {clean_menu_desc}"
+        else:
+            clean_menu_desc = f"{angle_tag} Mid-Day Meal Student Headcount (Min 8 Angles Protocol)"
+    elif category == "MEAL_PREPARATION" and clean_zone:
+        zone_tag = f"[AP MDM Zone {clean_zone}{f' - {clean_day}' if clean_day else ''}]"
+        if clean_menu_desc:
+            clean_menu_desc = f"{zone_tag} {clean_menu_desc}"
+        else:
+            clean_menu_desc = f"{zone_tag} Statutory Meal Preparation Inspection"
+
+    # Store submission
     submission = ImageSubmission(
         school_id=current_user.school_id,
         uploaded_by_user_id=current_user.id,
         category=category,
         image_url=image_url,
+        video_url=None,
+        media_type="image",
         file_name=file.filename or unique_filename,
-        meal_type=meal_type,
-        menu_description=menu_description,
-        staff_name=staff_name,
-        inspection_shift=inspection_shift,
-        hygiene_notes=hygiene_notes,
-        latitude=latitude,
-        longitude=longitude,
-        captured_location=captured_location or location_text or "Geo-Stamp Verified",
-        captured_timestamp=captured_timestamp or timestamp or datetime.utcnow().isoformat(),
+        meal_type=clean_meal_type or "Daily Mid-Day Meal",
+        menu_description=clean_menu_desc,
+        staff_name=clean_staff,
+        inspection_shift=clean_shift,
+        hygiene_notes=clean_hygiene,
+        latitude=clean_lat,
+        longitude=clean_lon,
+        captured_location=clean_loc,
+        captured_timestamp=clean_time,
         status="PENDING_REVIEW",
         cv_status=None,
         cv_notes=None,
         cv_confidence=None,
         cv_processed_at=None,
-        cv_student_count=None
+        cv_student_count=clean_client_cnt if category == "STUDENT_EATING" else None,
+        cv_match_percentage=None
     )
     db.add(submission)
     db.commit()
     db.refresh(submission)
     
     submission_id = submission.id
-    menu_text = menu_description or meal_type or ""
+    menu_text = clean_menu_desc or clean_meal_type or ""
 
     # ── Background CV Analysis ─────────────────────────────────────────
-    def run_cv_analysis(img_path: str, sub_id: int, cat: str, menu: str):
+    def run_cv_analysis(media_path: str, sub_id: int, cat: str, menu: str, angle_num: Optional[int], zone_num: Optional[int], day_str: Optional[str]):
         """
         Runs in a daemon thread so the API returns immediately while CV processes.
         Opens a new DB session (thread-safe) to write back results.
@@ -287,33 +346,39 @@ def upload_school_image(
                 return
 
             if cat in ("MEAL_PREPARATION", "KITCHEN_HYGIENE"):
-                result = food_quality_check(img_path, menu)
+                result = food_quality_check(
+                    image_path=media_path,
+                    zone=zone_num,
+                    day_of_week=day_str,
+                    menu_description=menu,
+                    meal_type=sub.meal_type or ""
+                )
                 sub.cv_status = result["cv_status"]
                 sub.cv_notes = result["cv_notes"]
                 sub.cv_confidence = result["cv_confidence"]
+                sub.cv_match_percentage = result.get("cv_match_percentage")
                 sub.cv_processed_at = datetime.utcnow()
-                # Auto-set status to CV_PASS or CV_FLAG so admin sees it clearly
                 if result["cv_status"] == "CV_PASS":
                     sub.status = "CV_PASS"
                 elif result["cv_status"] == "CV_FLAG":
                     sub.status = "CV_FLAG"
 
             elif cat == "STUDENT_EATING":
-                result = count_students_in_image(img_path)
+                result = count_students_in_image(media_path)
                 student_count = result.get("cv_student_count", 0)
                 sub.cv_student_count = student_count
                 sub.cv_confidence = result.get("cv_confidence", 0.8)
                 sub.cv_processed_at = datetime.utcnow()
                 
-                # If zero students detected or CV check flagged, enforce CV_FLAG
+                angle_pfx = f"[Angle {angle_num}/8] " if angle_num else ""
                 if student_count == 0 or result.get("cv_status") != "CV_PASS":
                     sub.cv_status = "CV_FLAG"
                     sub.status = "CV_FLAG"
-                    sub.cv_notes = result.get("cv_notes") or "Zero students detected in dining frame. Photo flagged for inspection review."
+                    sub.cv_notes = f"{angle_pfx}" + (result.get("cv_notes") or "Zero students detected in dining frame. Photo flagged for inspection review.")
                 else:
                     sub.cv_status = "CV_PASS"
                     sub.status = "CV_PASS"
-                    sub.cv_notes = result.get("cv_notes", f"YOLOv8 detected ~{student_count} student(s) eating.")
+                    sub.cv_notes = f"{angle_pfx}" + result.get("cv_notes", f"YOLOv8 detected ~{student_count} student(s) eating.")
 
             _db.commit()
         except Exception as e:
@@ -331,21 +396,27 @@ def upload_school_image(
         finally:
             _db.close()
 
-    # Only run CV for MEAL_PREPARATION and STUDENT_EATING
+    # Launch CV analysis
     abs_file_path = os.path.abspath(file_path)
+    is_serverless = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
     if category in ["MEAL_PREPARATION", "STUDENT_EATING"]:
-        t = threading.Thread(
-            target=run_cv_analysis,
-            args=(abs_file_path, submission_id, category, menu_text),
-            daemon=True
-        )
-        t.start()
-    # KITCHEN_HYGIENE stays PENDING_REVIEW for admin manual check
+        if is_serverless:
+            # Serverless containers freeze background threads upon HTTP response.
+            # Execute synchronously so CV results are persisted immediately.
+            run_cv_analysis(abs_file_path, submission_id, category, menu_text, clean_angle_num, clean_zone, clean_day)
+            db.refresh(submission)
+        else:
+            t = threading.Thread(
+                target=run_cv_analysis,
+                args=(abs_file_path, submission_id, category, menu_text, clean_angle_num, clean_zone, clean_day),
+                daemon=True
+            )
+            t.start()
     
     log_audit(
         db=db,
         action="IMAGE_UPLOADED",
-        details=f"Photo uploaded for {category}: {file.filename} (CV analysis {'queued' if category != 'KITCHEN_HYGIENE' else 'N/A — manual review'})",
+        details=f"Photo uploaded for {category}: {file.filename} (CV analysis {'completed' if is_serverless else 'queued' if category != 'KITCHEN_HYGIENE' else 'N/A — manual review'})",
         user_email=current_user.email,
         school_id=current_user.school_id,
         user_id=current_user.id
@@ -353,14 +424,174 @@ def upload_school_image(
     
     cv_info = ""
     if category == "MEAL_PREPARATION":
-        cv_info = " CV food quality check is running in background."
+        cv_info = " CV food quality check against AP MDM Zone Menu completed." if is_serverless else " CV food quality check against AP MDM Zone Menu is running in background."
     elif category == "STUDENT_EATING":
-        cv_info = " CV student count is running in background."
+        cv_info = " CV student count completed." if is_serverless else " CV student count is running in background."
     
     return {
         "status": "success",
         "message": f"Image uploaded successfully.{cv_info} Awaiting administrator verification.",
         "image": submission
+    }
+
+
+@router.post("/upload-student-batch")
+def upload_student_batch(
+    files: List[UploadFile] = File(...),
+    staff_name: Optional[str] = Form(None),
+    inspection_shift: Optional[str] = Form("Lunch Serving"),
+    hygiene_notes: Optional[str] = Form(None),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None),
+    captured_location: Optional[str] = Form(None),
+    location_text: Optional[str] = Form(None),
+    captured_timestamp: Optional[str] = Form(None),
+    timestamp: Optional[str] = Form(None),
+    current_user: User = Depends(require_school),
+    db: Session = Depends(get_db)
+):
+    """
+    Accepts the mandatory batch of 8 student dining angle images.
+    Each image is saved with its respective angle tag and analyzed via YOLOv8.
+    """
+    if not files or len(files) == 0:
+        raise HTTPException(status_code=400, detail="At least one image must be provided.")
+
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+    ANGLE_LABELS = [
+        "Front Center", "Front Left", "Front Right", "Left Corridor",
+        "Right Corridor", "Rear Dining", "Center Aisle", "Wide View"
+    ]
+
+    clean_staff = str(staff_name) if staff_name and not hasattr(staff_name, 'default') else "Mid-Day Meal Staff"
+    clean_shift = str(inspection_shift) if inspection_shift and not hasattr(inspection_shift, 'default') else "Lunch Serving"
+    clean_hygiene = str(hygiene_notes) if hygiene_notes and not hasattr(hygiene_notes, 'default') else None
+    
+    clean_lat = None
+    if latitude is not None and not hasattr(latitude, 'default'):
+        try: clean_lat = float(latitude)
+        except Exception: pass
+
+    clean_lon = None
+    if longitude is not None and not hasattr(longitude, 'default'):
+        try: clean_lon = float(longitude)
+        except Exception: pass
+
+    clean_loc = str(captured_location or location_text or "Geo-Stamp Verified")
+    clean_time = str(captured_timestamp or timestamp or datetime.utcnow().isoformat())
+
+    created_submissions = []
+    to_process = []
+    is_serverless = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
+
+    def _run_single_cv(media_path: str, sub_id: int, angle_num: int):
+        from ..database.connection import SessionLocal as _SL
+        _db = _SL()
+        try:
+            sub = _db.query(ImageSubmission).filter(ImageSubmission.id == sub_id).first()
+            if not sub:
+                return
+            result = count_students_in_image(media_path)
+            student_count = result.get("cv_student_count", 0)
+            sub.cv_student_count = student_count
+            sub.cv_confidence = result.get("cv_confidence", 0.8)
+            sub.cv_processed_at = datetime.utcnow()
+            angle_pfx = f"[Angle {angle_num}/8] "
+            if student_count == 0 or result.get("cv_status") != "CV_PASS":
+                sub.cv_status = "CV_FLAG"
+                sub.status = "CV_FLAG"
+                sub.cv_notes = f"{angle_pfx}" + (result.get("cv_notes") or "Zero students detected in dining frame. Flagged.")
+            else:
+                sub.cv_status = "CV_PASS"
+                sub.status = "CV_PASS"
+                sub.cv_notes = f"{angle_pfx}" + result.get("cv_notes", f"YOLOv8 detected ~{student_count} student(s) eating.")
+            _db.commit()
+        except Exception as e:
+            import logging
+            logging.getLogger("cv_service").error(f"Student batch CV error: {e}")
+            try:
+                sub = _db.query(ImageSubmission).filter(ImageSubmission.id == sub_id).first()
+                if sub:
+                    sub.cv_status = "CV_FLAG"
+                    sub.cv_notes = f"[Angle {angle_num}/8] CV processed (flagged for review: {str(e)[:60]})"
+                    sub.cv_processed_at = datetime.utcnow()
+                    _db.commit()
+            except Exception:
+                pass
+        finally:
+            _db.close()
+
+    for idx, f in enumerate(files):
+        angle_num = idx + 1
+        angle_lbl = ANGLE_LABELS[idx] if idx < len(ANGLE_LABELS) else f"Angle {angle_num}"
+        orig_ext = os.path.splitext(f.filename)[1].lower() if f.filename else ""
+        file_ext = orig_ext if orig_ext in [".jpg", ".jpeg", ".png", ".webp"] else ".jpg"
+        unique_name = f"img_student_{current_user.school_id}_a{angle_num}_{uuid.uuid4().hex[:8]}{file_ext}"
+        f_path = os.path.join(UPLOAD_DIR, unique_name)
+
+        with open(f_path, "wb") as buf:
+            shutil.copyfileobj(f.file, buf)
+
+        desc = f"[Angle {angle_num}/8: {angle_lbl}] Student Dining Attendance Headcount"
+
+        sub = ImageSubmission(
+            school_id=current_user.school_id,
+            uploaded_by_user_id=current_user.id,
+            category="STUDENT_EATING",
+            image_url=f"/uploads/{unique_name}",
+            video_url=None,
+            media_type="image",
+            file_name=f.filename or unique_name,
+            meal_type=f"Student Attendance (Angle {angle_num}/8)",
+            menu_description=desc,
+            staff_name=clean_staff,
+            inspection_shift=clean_shift,
+            hygiene_notes=clean_hygiene,
+            latitude=clean_lat,
+            longitude=clean_lon,
+            captured_location=clean_loc,
+            captured_timestamp=clean_time,
+            status="PENDING_REVIEW",
+            cv_status=None,
+            cv_notes=None,
+            cv_confidence=None,
+            cv_processed_at=None,
+            cv_student_count=None,
+            cv_match_percentage=None
+        )
+        db.add(sub)
+        db.commit()
+        db.refresh(sub)
+        created_submissions.append(sub)
+        to_process.append((sub, os.path.abspath(f_path), angle_num))
+
+    # Run CV analysis for each angle
+    for sub, abs_p, angle_num in to_process:
+        if is_serverless:
+            # Serverless containers freeze background threads upon HTTP response.
+            # Execute synchronously so student headcounts are persisted immediately.
+            _run_single_cv(abs_p, sub.id, angle_num)
+            db.refresh(sub)
+        else:
+            t = threading.Thread(target=_run_single_cv, args=(abs_p, sub.id, angle_num), daemon=True)
+            t.start()
+
+    log_audit(
+        db=db,
+        action="STUDENT_BATCH_UPLOADED",
+        details=f"Uploaded {len(created_submissions)} angle images for student attendance headcount (CV {'completed' if is_serverless else 'queued'}).",
+        user_email=current_user.email,
+        school_id=current_user.school_id,
+        user_id=current_user.id
+    )
+
+    msg_suffix = "AI student headcount completed successfully." if is_serverless else "AI student headcount is processing in background."
+    return {
+        "status": "success",
+        "message": f"Successfully uploaded all {len(created_submissions)} angle photos. {msg_suffix}",
+        "count": len(created_submissions),
+        "images": created_submissions
     }
 
 @router.get("/alerts", response_model=List[AlertResponse])

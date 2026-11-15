@@ -111,6 +111,9 @@ export const schoolService = {
   uploadMealImage: (formData) => API.post('/school/upload-image', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
+  uploadStudentBatch: (formData) => API.post('/school/upload-student-batch', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
   getAlerts: () => API.get('/school/alerts'),
   getProfile: () => API.get('/school/profile')
 };

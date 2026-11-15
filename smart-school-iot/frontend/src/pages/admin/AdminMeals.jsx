@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { adminService, getImageUrl, FALLBACK_IMAGE } from '../../services/api';
+import { MdmMenuModal } from '../../components/MdmMenuModal';
 import {
   UtensilsCrossed,
   Check,
@@ -22,6 +23,7 @@ export const AdminMeals = () => {
   const [selectedSchoolId, setSelectedSchoolId] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
+  const [menuModalOpen, setMenuModalOpen] = useState(false);
   const [reviewNotes, setReviewNotes] = useState('');
   const [isReviewing, setIsReviewing] = useState(false);
 
@@ -63,7 +65,7 @@ export const AdminMeals = () => {
   const getCategoryLabel = (cat) => {
     if (cat === 'MEAL_PREPARATION') return 'Meal Prep';
     if (cat === 'KITCHEN_HYGIENE')  return 'Kitchen Hygiene';
-    if (cat === 'STUDENT_EATING')   return 'Students Eating';
+    if (cat === 'STUDENT_EATING')   return 'Students Eating (Min 8 Angles)';
     return cat;
   };
 
@@ -107,9 +109,18 @@ export const AdminMeals = () => {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button
+            onClick={() => setMenuModalOpen(true)}
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
+            title="View 2025 AP Mid-Day Meal Menu (Zones 1-4)"
+          >
+            <UtensilsCrossed className="w-3.5 h-3.5" />
+            <span>MDM Menu 2025</span>
+          </button>
+
+          <button
             onClick={() => { setRefreshing(true); fetchMeals(); }}
             disabled={refreshing}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-xs"
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-xs cursor-pointer"
             title="Refresh submissions"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-teal-600' : 'text-slate-500'}`} />
@@ -283,9 +294,10 @@ export const AdminMeals = () => {
                       <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <button
                           onClick={() => { setSelectedImage(img); setReviewNotes(img.admin_notes || ''); }}
-                          className="px-3 py-1.5 rounded-lg bg-teal-600 text-white font-semibold text-xs flex items-center space-x-1 shadow-xs"
+                          className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs flex items-center space-x-1.5 shadow-xs"
                         >
-                          <Eye className="w-4 h-4" /><span>Inspect Full Photo</span>
+                          <Eye className="w-4 h-4" />
+                          <span>Inspect Full Photo</span>
                         </button>
                       </div>
 
@@ -322,9 +334,20 @@ export const AdminMeals = () => {
                     <div className="p-4 space-y-2 text-xs">
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-slate-900 text-sm truncate">{img.school_name || 'School'}</span>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          {new Date(img.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+                        <div className="flex items-center space-x-1.5">
+                          {img.cv_match_percentage != null && (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                              img.cv_match_percentage >= 80 ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                              img.cv_match_percentage >= 50 ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                              'bg-rose-50 text-rose-800 border-rose-200'
+                            }`}>
+                              {Math.round(img.cv_match_percentage)}% Match
+                            </span>
+                          )}
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {new Date(img.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
                       </div>
 
                       {img.meal_type && <p className="text-teal-800 font-medium">Menu: {img.meal_type}</p>}
@@ -383,6 +406,12 @@ export const AdminMeals = () => {
         </div>
       )}
 
+      <MdmMenuModal
+        isOpen={menuModalOpen}
+        onClose={() => setMenuModalOpen(false)}
+        defaultZone={2}
+      />
+
       {/* Inspection Modal */}
       {selectedImage && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
@@ -399,13 +428,13 @@ export const AdminMeals = () => {
             </div>
 
             <div className="p-5 space-y-4">
-              {/* Full image */}
-              <div className="max-h-80 overflow-hidden rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center">
+              {/* Full Media (Stamped Photo) */}
+              <div className="max-h-96 overflow-hidden rounded-xl bg-slate-950 border border-slate-200 flex items-center justify-center">
                 <img
                   src={getImageUrl(selectedImage.image_url)}
                   alt="Full Resolution"
                   onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMAGE; }}
-                  className="max-h-80 w-auto object-contain"
+                  className="max-h-96 w-auto object-contain"
                 />
               </div>
 
@@ -431,6 +460,17 @@ export const AdminMeals = () => {
                   )}
 
                   <div className="flex flex-wrap gap-3 text-[11px]">
+                    {selectedImage.cv_match_percentage != null && (
+                      <div className="bg-white rounded-lg px-3 py-2 text-center border border-slate-200 min-w-[95px] shadow-xs">
+                        <p className="text-slate-500 font-medium">Description Match</p>
+                        <p className={`font-bold text-lg ${
+                          selectedImage.cv_match_percentage >= 80 ? 'text-emerald-700' :
+                          selectedImage.cv_match_percentage >= 50 ? 'text-amber-700' : 'text-rose-700'
+                        }`}>
+                          {Math.round(selectedImage.cv_match_percentage)}%
+                        </p>
+                      </div>
+                    )}
                     {selectedImage.cv_confidence != null && (
                       <div className="bg-white rounded-lg px-3 py-2 text-center border border-slate-200 min-w-[80px]">
                         <p className="text-slate-500">Confidence</p>

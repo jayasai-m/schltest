@@ -145,6 +145,8 @@ class ImageSubmissionResponse(BaseModel):
     meal_submission_id: Optional[int] = None
     category: str
     image_url: str
+    video_url: Optional[str] = None
+    media_type: Optional[str] = "image"
     file_name: str
     meal_type: Optional[str] = None
     menu_description: Optional[str] = None
@@ -165,6 +167,7 @@ class ImageSubmissionResponse(BaseModel):
     cv_confidence: Optional[float] = None
     cv_processed_at: Optional[datetime] = None
     cv_student_count: Optional[int] = None
+    cv_match_percentage: Optional[float] = None
     created_at: datetime
 
     class Config:

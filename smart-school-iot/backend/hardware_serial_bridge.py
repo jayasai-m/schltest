@@ -31,8 +31,8 @@ logger = logging.getLogger("serial_bridge")
 import os
 
 LOCAL_SERVER = os.getenv("HARDWARE_SERVER_URL", "http://127.0.0.1:8000/api/hardware/telemetry")
-CLOUD_SERVER = "https://smart-school-iot.vercel.app/api/hardware/telemetry"
-TARGET_URLS = [LOCAL_SERVER, CLOUD_SERVER] if LOCAL_SERVER != CLOUD_SERVER else [LOCAL_SERVER]
+CLOUD_SERVER = os.getenv("CLOUD_SERVER_URL", "https://smart-school-iot.vercel.app/api/hardware/telemetry")
+TARGET_URLS = list(dict.fromkeys([u for u in [LOCAL_SERVER, CLOUD_SERVER] if u]))
 SCHOOL_ID = 1
 API_KEY = "esp32_penamaluru_hw_key_2026"
 DEVICE_ID = "ESP32-PENAMALURU-01"

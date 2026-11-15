@@ -41,9 +41,9 @@ def process_sensor_telemetry(
         elif water_level_pct <= school.low_water_threshold_pct:
             ultrasonic_status = "LOW"
     else:
-        # Ultrasonic sensor removed or disabled
-        water_level_pct = None
-        water_volume_litres = None
+        # Ultrasonic sensor removed or disabled (default to 0.0 for legacy schema compatibility)
+        water_level_pct = 0.0
+        water_volume_litres = 0.0
         ultrasonic_status = "N/A"
         
     # Turbidity condition
@@ -63,9 +63,9 @@ def process_sensor_telemetry(
     # Save reading to database
     reading = SensorReading(
         school_id=school.id,
-        distance_cm=round(distance_cm, 1) if distance_cm is not None else None,
-        water_level_pct=water_level_pct,
-        water_volume_litres=water_volume_litres,
+        distance_cm=round(distance_cm, 1) if distance_cm is not None else 0.0,
+        water_level_pct=water_level_pct if water_level_pct is not None else 0.0,
+        water_volume_litres=water_volume_litres if water_volume_litres is not None else 0.0,
         ultrasonic_status=ultrasonic_status,
         turbidity_ntu=round(turbidity_ntu, 2),
         turbidity_voltage=round(turbidity_voltage, 3) if turbidity_voltage is not None else None,

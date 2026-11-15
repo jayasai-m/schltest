@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminService, getImageUrl, FALLBACK_IMAGE } from '../../services/api';
 import { useLang } from '../../context/LanguageContext';
+import { MdmMenuModal } from '../../components/MdmMenuModal';
 import {
   Building2,
   Clock,
@@ -11,13 +12,15 @@ import {
   Eye,
   ArrowRight,
   UtensilsCrossed,
-  RefreshCw
+  RefreshCw,
+  Users
 } from 'lucide-react';
 
 export const AdminDashboard = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [menuModalOpen, setMenuModalOpen] = useState(false);
   const { t } = useLang();
 
   const fetchDashboard = async () => {
@@ -68,14 +71,25 @@ export const AdminDashboard = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => { setRefreshing(true); fetchDashboard(); }}
-          disabled={refreshing}
-          className="flex items-center space-x-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-xs transition-colors w-fit"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-teal-600' : 'text-slate-400'}`} />
-          <span>{t('refreshData')}</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setMenuModalOpen(true)}
+            className="flex items-center space-x-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
+            title="View 2025 AP Mid-Day Meal Menu (Zones 1-4)"
+          >
+            <UtensilsCrossed className="w-3.5 h-3.5" />
+            <span>MDM Menu 2025</span>
+          </button>
+
+          <button
+            onClick={() => { setRefreshing(true); fetchDashboard(); }}
+            disabled={refreshing}
+            className="flex items-center space-x-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-xs transition-colors w-fit cursor-pointer"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-teal-600' : 'text-slate-400'}`} />
+            <span>{t('refreshData')}</span>
+          </button>
+        </div>
       </div>
 
       {/* 4 Summary Stats Cards */}
@@ -303,18 +317,30 @@ export const AdminDashboard = () => {
               images.slice(0, 5).map((img) => (
                 <div key={img.id} className="p-3 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <img
-                      src={getImageUrl(img.image_url)}
-                      alt="Thumbnail"
-                      onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMAGE; }}
-                      className="w-12 h-12 object-cover rounded-lg border border-slate-200"
-                    />
+                    <div className="relative w-12 h-12 shrink-0">
+                      <img
+                        src={getImageUrl(img.image_url)}
+                        alt="Thumbnail"
+                        onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_IMAGE; }}
+                        className="w-12 h-12 object-cover rounded-lg border border-slate-200"
+                      />
+                    </div>
                     <div>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200 uppercase">
-                        {img.category === 'MEAL_PREPARATION' ? 'Meal Prep' : img.category === 'STUDENT_EATING' ? 'Students Eating' : 'Hygiene'}
-                      </span>
-                      <p className="text-xs font-semibold text-slate-900 mt-1">{img.meal_type || 'Photo Submission'}</p>
-                      <p className="text-[10px] text-slate-500">Cook: {img.staff_name || 'Staff'}</p>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200 uppercase">
+                          {img.category === 'MEAL_PREPARATION' ? 'Meal Prep' : img.category === 'STUDENT_EATING' ? 'Students Eating' : 'Hygiene'}
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold text-slate-900 mt-1">{img.meal_type || 'In-App Submission'}</p>
+                      <div className="flex items-center space-x-2 text-[10px] text-slate-500">
+                        <span>Staff: {img.staff_name || 'Staff'}</span>
+                        {img.category === 'STUDENT_EATING' && (
+                          <span className="font-bold text-teal-700 bg-teal-50 px-1.5 py-0.2 rounded border border-teal-200 flex items-center space-x-0.5">
+                            <Users className="w-3 h-3 text-teal-600 inline" />
+                            <span>{img.cv_student_count != null ? `${img.cv_student_count} students` : 'Counting…'}</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
@@ -331,6 +357,11 @@ export const AdminDashboard = () => {
           </div>
         </div>
       </div>
+      <MdmMenuModal
+        isOpen={menuModalOpen}
+        onClose={() => setMenuModalOpen(false)}
+        defaultZone={2}
+      />
     </div>
   );
 };

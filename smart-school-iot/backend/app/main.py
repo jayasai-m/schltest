@@ -20,7 +20,9 @@ from .api.message_routes import router as message_router
 # Create all database tables (including inspector_schools and messages)
 Base.metadata.create_all(bind=engine)
 
-UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/tmp/uploads" if os.getenv("VERCEL") else "uploads")
+import tempfile
+_tmp_dir = "/tmp" if os.name != "nt" else tempfile.gettempdir()
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", os.path.join(_tmp_dir, "uploads") if os.getenv("VERCEL") else "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = FastAPI(
@@ -79,7 +81,10 @@ def seed_initial_data():
         ("cv_notes", "TEXT NULL"),
         ("cv_confidence", "FLOAT NULL"),
         ("cv_processed_at", "DATETIME NULL"),
-        ("cv_student_count", "INTEGER NULL")
+        ("cv_student_count", "INTEGER NULL"),
+        ("cv_match_percentage", "FLOAT NULL"),
+        ("video_url", "VARCHAR(255) NULL"),
+        ("media_type", "VARCHAR(50) DEFAULT 'image' NULL")
     ]
     try:
         with engine.connect() as conn:
@@ -126,6 +131,14 @@ def seed_initial_data():
             db.refresh(penamaluru)
             print(">>> Seeded Initial School: ZPHS Penamaluru (ACTIVE)")
         else:
+            if penamaluru.name != "ZPHS Penamaluru":
+                penamaluru.name = "ZPHS Penamaluru"
+            if not penamaluru.hardware_api_key or penamaluru.hardware_api_key != "esp32_penamaluru_hw_key_2026":
+                penamaluru.hardware_api_key = "esp32_penamaluru_hw_key_2026"
+            if not penamaluru.hardware_device_id or penamaluru.hardware_device_id != "ESP32-PENAMALURU-01":
+                penamaluru.hardware_device_id = "ESP32-PENAMALURU-01"
+            db.commit()
+            db.refresh(penamaluru)
             penamaluru_id = penamaluru.id
 
         # Seed Admin account: admin@gmail.com / abc123

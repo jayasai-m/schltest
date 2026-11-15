@@ -38,14 +38,14 @@ if DATABASE_URL.startswith("mysql"):
         host = host_port.split(":")[0]
         port = int(host_port.split(":")[1]) if ":" in host_port else 3306
 
-        conn = pymysql.connect(host=host, user=user, password=password, port=port)
+        conn = pymysql.connect(host=host, user=user, password=password, port=port, connect_timeout=3)
         cursor = conn.cursor()
         cursor.execute(f"CREATE DATABASE IF NOT EXISTS `{db_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;")
         conn.close()
     except Exception as e:
         print(f"Notice: MySQL auto-create check: {e}")
 
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {"connect_timeout": 3}
 
 try:
     engine = create_engine(

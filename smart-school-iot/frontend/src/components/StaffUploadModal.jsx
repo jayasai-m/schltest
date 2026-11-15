@@ -1,16 +1,41 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Camera, Check, AlertCircle, RefreshCw, MapPin, Clock, ShieldCheck, SwitchCamera, VideoOff } from 'lucide-react';
+import {
+  X, Camera, Check, AlertCircle, RefreshCw, MapPin, Clock,
+  ShieldCheck, SwitchCamera, VideoOff, Users, UtensilsCrossed,
+  Calendar, Layers, CheckCircle2, ChevronRight
+} from 'lucide-react';
 import { schoolService } from '../services/api';
+import { AP_MDM_ZONES, DAYS_OF_WEEK, getTodayDayName } from '../data/mdmMenu';
+
+const EIGHT_ANGLES = [
+  { id: 1, label: 'Front Center', desc: 'Main dining hall center rows' },
+  { id: 2, label: 'Front Left', desc: 'Front left dining tables & benches' },
+  { id: 3, label: 'Front Right', desc: 'Front right dining tables & benches' },
+  { id: 4, label: 'Left Corridor', desc: 'Left dining corridor & side seating' },
+  { id: 5, label: 'Right Corridor', desc: 'Right dining corridor & side seating' },
+  { id: 6, label: 'Rear Dining', desc: 'Back of dining hall looking forward' },
+  { id: 7, label: 'Center Aisle', desc: 'Middle walking lane & food line' },
+  { id: 8, label: 'Wide View', desc: 'Full hall wide panoramic perspective' }
+];
 
 export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName }) => {
   const [category, setCategory] = useState('MEAL_PREPARATION');
+  
+  // AP MDM Zone & Day State for Food Inspection
+  const [selectedZone, setSelectedZone] = useState(2); // Default to Zone 2 (Krishna District / Penamaluru)
+  const [selectedDay, setSelectedDay] = useState(getTodayDayName());
+
+  // 8 Angle State for Student Count
+  const [selectedAngle, setSelectedAngle] = useState(1);
+  const [capturedAnglePhotos, setCapturedAnglePhotos] = useState(new Array(8).fill(null));
+
   const [mealType, setMealType] = useState('');
   const [menuDescription, setMenuDescription] = useState('');
   const [staffName, setStaffName] = useState('');
-  const [inspectionShift, setInspectionShift] = useState('Morning Prep');
+  const [inspectionShift, setInspectionShift] = useState('Lunch Serving');
   const [hygieneNotes, setHygieneNotes] = useState('');
 
-  // Camera & Capture State
+  // Camera & Stream State
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const [cameraActive, setCameraActive] = useState(false);
@@ -26,14 +51,18 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
     isLoaded: false
   });
 
-  // Captured Photo State (Blob and Preview)
-  const [capturedBlob, setCapturedBlob] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [capturedMeta, setCapturedMeta] = useState(null);
+  // Single Captured Photo State (for Meal Prep & Hygiene)
+  const [singleCapturedBlob, setSingleCapturedBlob] = useState(null);
+  const [singlePreviewUrl, setSinglePreviewUrl] = useState(null);
+  const [singleMeta, setSingleMeta] = useState(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Current Zone Menu Data
+  const currentZoneData = AP_MDM_ZONES[selectedZone] || AP_MDM_ZONES[2];
+  const currentDayMenu = currentZoneData.schedule[selectedDay] || currentZoneData.schedule['Monday'];
 
   // Fetch Geolocation when modal opens
   useEffect(() => {
@@ -126,17 +155,24 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
     setCameraActive(false);
   };
 
-  // Open camera when modal opens
+  // Keep camera live while modal is open (especially for taking multiple angles)
   useEffect(() => {
-    if (isOpen && !previewUrl) {
-      startCamera(facingMode);
+    if (isOpen) {
+      if (category === 'STUDENT_EATING') {
+        // Keep camera running so staff can take all 8 angles smoothly
+        startCamera(facingMode);
+      } else {
+        if (!singlePreviewUrl) {
+          startCamera(facingMode);
+        } else {
+          stopCamera();
+        }
+      }
     } else {
       stopCamera();
     }
-    return () => {
-      stopCamera();
-    };
-  }, [isOpen, previewUrl]);
+    return () => stopCamera();
+  }, [isOpen, category, singlePreviewUrl]);
 
   // Toggle Camera Front/Back
   const toggleFacingMode = () => {
@@ -145,7 +181,9 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
     startCamera(nextMode);
   };
 
-  // Capture Photo and Burn Timestamp & Location into Canvas Pixels
+  // ─────────────────────────────────────────────────────────────
+  // Photo Capture Logic (Stamped Canvas)
+  // ─────────────────────────────────────────────────────────────
   const capturePhoto = () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
@@ -169,79 +207,113 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
     });
     const isoTimestamp = now.toISOString();
 
-    const locString = locationData.text || 'Location: ZPHS Penamaluru (Node SCH-PENAMALURU-001)';
+    const locString = locationData.text || 'Location: ZPHS Penamaluru Node';
     const nodeLabel = schoolName || 'ZPHS Penamaluru';
+    
+    const curAngleObj = EIGHT_ANGLES.find((a) => a.id === selectedAngle) || EIGHT_ANGLES[0];
     const categoryLabel =
-      category === 'MEAL_PREPARATION' ? 'MEAL PREPARATION'
-      : category === 'KITCHEN_HYGIENE' ? 'KITCHEN HYGIENE'
-      : 'STUDENT MEAL ATTENDANCE';
+      category === 'MEAL_PREPARATION'
+        ? `MEAL PREPARATION • ZONE ${selectedZone} (${selectedDay.toUpperCase()})`
+        : category === 'KITCHEN_HYGIENE'
+        ? 'KITCHEN HYGIENE INSPECTION'
+        : `STUDENT ATTENDANCE [Angle ${curAngleObj.id}/8: ${curAngleObj.label}]`;
+
     const shiftLabel = inspectionShift || 'Inspection Shift';
     const staffLabel = staffName ? `Staff: ${staffName}` : 'Mid-Day Meal Staff';
 
-    // 3. Burn Security & Compliance Watermark Banner at the bottom of the image
+    // 3. Burn Security Watermark Banner
     const bannerHeight = Math.max(90, Math.round(height * 0.16));
     const bannerY = height - bannerHeight;
 
-    // Gradient translucent background banner
     const gradient = ctx.createLinearGradient(0, bannerY, 0, height);
     gradient.addColorStop(0, 'rgba(15, 23, 42, 0.88)');
     gradient.addColorStop(1, 'rgba(2, 6, 23, 0.96)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, bannerY, width, bannerHeight);
 
-    // Accent line separator (Teal)
     ctx.fillStyle = '#0d9488';
     ctx.fillRect(0, bannerY, width, 4);
 
-    // Subtle drop shadow for text
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 4;
     ctx.shadowOffsetX = 1;
     ctx.shadowOffsetY = 1;
 
-    // Font scaling based on canvas resolution
     const baseFontSize = Math.max(12, Math.round(height * 0.024));
     ctx.font = `bold ${baseFontSize}px 'Inter', sans-serif`;
 
-    // Row 1: Location & School Node
     ctx.fillStyle = '#38bdf8';
     ctx.fillText(`LOCATION: ${locString}  |  ${nodeLabel}`, 20, bannerY + baseFontSize + 12);
 
-    // Row 2: Timestamp
     ctx.fillStyle = '#facc15';
     ctx.fillText(`CAPTURE TIME: ${timestampStr}`, 20, bannerY + (baseFontSize * 2) + 18);
 
-    // Row 3: Category, Shift & Staff
     ctx.fillStyle = '#ffffff';
     ctx.font = `500 ${Math.max(11, baseFontSize - 2)}px 'Inter', sans-serif`;
     ctx.fillText(`${categoryLabel}  •  ${shiftLabel}  •  ${staffLabel}`, 20, bannerY + (baseFontSize * 3) + 24);
 
-    // Right-aligned verification badge
     ctx.textAlign = 'right';
     ctx.fillStyle = '#2dd4bf';
     ctx.font = `bold ${Math.max(11, baseFontSize - 2)}px 'Inter', sans-serif`;
     ctx.fillText('GOVT OF ANDHRA PRADESH', width - 20, bannerY + baseFontSize + 12);
     ctx.fillStyle = '#94a3b8';
     ctx.font = `400 ${Math.max(10, baseFontSize - 4)}px 'Inter', sans-serif`;
-    ctx.fillText('SmartSchoolIoT Verified In-App Capture', width - 20, bannerY + (baseFontSize * 2) + 18);
+    ctx.fillText(
+      category === 'STUDENT_EATING'
+        ? `YOLOv8 Student Headcount • Angle ${curAngleObj.id} of 8`
+        : `AP MDM 2025 Verified • Zone ${selectedZone}`,
+      width - 20,
+      bannerY + (baseFontSize * 2) + 18
+    );
 
-    // Reset textAlign & shadow
     ctx.textAlign = 'left';
     ctx.shadowColor = 'transparent';
 
-    // 4. Convert stamped canvas to Blob
     canvas.toBlob(
       (blob) => {
-        if (blob) {
-          setCapturedBlob(blob);
-          const url = URL.createObjectURL(blob);
-          setPreviewUrl(url);
-          setCapturedMeta({
-            timestamp: isoTimestamp,
-            latitude: locationData.latitude,
-            longitude: locationData.longitude,
-            location_text: locString
+        if (!blob) return;
+
+        const url = URL.createObjectURL(blob);
+        const meta = {
+          timestamp: isoTimestamp,
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          location_text: locString
+        };
+
+        if (category === 'STUDENT_EATING') {
+          // Save into the specific angle slot
+          setCapturedAnglePhotos((prev) => {
+            const updated = [...prev];
+            if (updated[selectedAngle - 1]?.previewUrl) {
+              URL.revokeObjectURL(updated[selectedAngle - 1].previewUrl);
+            }
+            updated[selectedAngle - 1] = {
+              blob,
+              previewUrl: url,
+              meta,
+              angleId: curAngleObj.id,
+              angleLabel: curAngleObj.label
+            };
+            return updated;
           });
+
+          // Auto-advance to next uncaptured angle if available
+          setCapturedAnglePhotos((currentArr) => {
+            const nextEmptyIndex = currentArr.findIndex((slot, i) => i !== (selectedAngle - 1) && !slot);
+            if (nextEmptyIndex !== -1) {
+              setSelectedAngle(nextEmptyIndex + 1);
+            } else if (selectedAngle < 8) {
+              setSelectedAngle(selectedAngle + 1);
+            }
+            return currentArr;
+          });
+
+        } else {
+          // Single photo for Meal Prep or Kitchen Hygiene
+          setSingleCapturedBlob(blob);
+          setSinglePreviewUrl(url);
+          setSingleMeta(meta);
           stopCamera();
         }
       },
@@ -250,38 +322,66 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
     );
   };
 
-  // Retake photo action
-  const handleRetake = () => {
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
+  // Retake photo for single mode
+  const handleSingleRetake = () => {
+    if (singlePreviewUrl) {
+      URL.revokeObjectURL(singlePreviewUrl);
     }
-    setPreviewUrl(null);
-    setCapturedBlob(null);
-    setCapturedMeta(null);
+    setSinglePreviewUrl(null);
+    setSingleCapturedBlob(null);
+    setSingleMeta(null);
     startCamera(facingMode);
+  };
+
+  // Clear specific angle in multi-angle mode
+  const handleRetakeAngle = (idx) => {
+    setCapturedAnglePhotos((prev) => {
+      const updated = [...prev];
+      if (updated[idx]?.previewUrl) {
+        URL.revokeObjectURL(updated[idx].previewUrl);
+      }
+      updated[idx] = null;
+      return updated;
+    });
+    setSelectedAngle(idx + 1);
   };
 
   // Close and cleanup
   const handleCloseModal = () => {
     stopCamera();
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-    setPreviewUrl(null);
-    setCapturedBlob(null);
-    setCapturedMeta(null);
+    if (singlePreviewUrl) URL.revokeObjectURL(singlePreviewUrl);
+    capturedAnglePhotos.forEach((item) => {
+      if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    });
+    setSinglePreviewUrl(null);
+    setSingleCapturedBlob(null);
+    setSingleMeta(null);
+    setCapturedAnglePhotos(new Array(8).fill(null));
     setErrorMsg('');
     setSuccessMsg('');
     onClose();
   };
 
+  // Count captured angles
+  const capturedAnglesCount = capturedAnglePhotos.filter(Boolean).length;
+  const isEightAnglesReady = capturedAnglesCount === 8;
+
   // Handle Form Submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!capturedBlob) {
-      setErrorMsg('Please capture a photo using the live camera before submitting.');
-      return;
+
+    if (category === 'STUDENT_EATING') {
+      if (!isEightAnglesReady) {
+        setErrorMsg(`All 8 angle images must be captured before submission. Currently captured: ${capturedAnglesCount} / 8.`);
+        return;
+      }
+    } else {
+      if (!singleCapturedBlob) {
+        setErrorMsg('Please capture a photo using the live camera before submitting.');
+        return;
+      }
     }
+
     if (!staffName.trim()) {
       setErrorMsg('Please enter the Cook / Staff name responsible for this inspection.');
       return;
@@ -292,44 +392,84 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
     setSuccessMsg('');
 
     try {
-      const formData = new FormData();
-      formData.append('file', capturedBlob, `staff_${Date.now()}.jpg`);
-      formData.append('category', category);
-      formData.append('meal_type', mealType || 'Daily Mid-Day Meal');
-      formData.append('menu_description', menuDescription || 'Mid-Day Meal Preparation');
-      formData.append('staff_name', staffName.trim());
-      formData.append('inspection_shift', inspectionShift);
-      formData.append('hygiene_notes', hygieneNotes);
-      const locText = capturedMeta?.location_text || locationData.text || 'Geo-Stamp Verified';
-      const timeStr = capturedMeta?.timestamp || new Date().toISOString();
-      formData.append('timestamp', timeStr);
-      formData.append('captured_timestamp', timeStr);
-      if (capturedMeta?.latitude !== null && capturedMeta?.latitude !== undefined) {
-        formData.append('latitude', capturedMeta.latitude.toString());
-      }
-      if (capturedMeta?.longitude !== null && capturedMeta?.longitude !== undefined) {
-        formData.append('longitude', capturedMeta.longitude.toString());
-      }
-      formData.append('location_text', locText);
-      formData.append('captured_location', locText);
+      const nowIso = new Date().toISOString();
+      const locText = singleMeta?.location_text || locationData.text || 'Geo-Stamp Verified';
+      const lat = singleMeta?.latitude ?? locationData.latitude;
+      const lon = singleMeta?.longitude ?? locationData.longitude;
 
-      await schoolService.uploadMealImage(formData);
+      if (category === 'STUDENT_EATING') {
+        // Upload all 8 images via batch endpoint
+        const formData = new FormData();
+        capturedAnglePhotos.forEach((item, index) => {
+          if (item?.blob) {
+            formData.append('files', item.blob, `student_angle_${index + 1}_${Date.now()}.jpg`);
+          }
+        });
 
-      setSuccessMsg('Photo stamped & submitted successfully for state verification.');
+        formData.append('staff_name', staffName.trim());
+        formData.append('inspection_shift', inspectionShift);
+        formData.append('hygiene_notes', hygieneNotes);
+        formData.append('timestamp', nowIso);
+        formData.append('captured_timestamp', nowIso);
+        if (lat !== null && lat !== undefined) formData.append('latitude', lat.toString());
+        if (lon !== null && lon !== undefined) formData.append('longitude', lon.toString());
+        formData.append('captured_location', locText);
+        formData.append('location_text', locText);
+
+        await schoolService.uploadStudentBatch(formData);
+        setSuccessMsg('All 8 angle images uploaded successfully! YOLOv8 student headcount in progress.');
+
+      } else {
+        // Single image upload for Meal Prep or Kitchen Hygiene
+        const formData = new FormData();
+        formData.append('file', singleCapturedBlob, `meal_${Date.now()}.jpg`);
+        formData.append('category', category);
+
+        if (category === 'MEAL_PREPARATION') {
+          formData.append('zone', selectedZone.toString());
+          formData.append('day_of_week', selectedDay);
+          formData.append('meal_type', `Zone ${selectedZone} - ${selectedDay} Menu`);
+          const officialDesc = `[Zone ${selectedZone}: ${selectedDay}] ${currentDayMenu.title} (${currentDayMenu.items.join(', ')})`;
+          formData.append('menu_description', menuDescription.trim() ? `${officialDesc} • Note: ${menuDescription.trim()}` : officialDesc);
+        } else {
+          formData.append('meal_type', 'Kitchen Cleanliness & Hygiene');
+          formData.append('menu_description', menuDescription || 'Sanitation and hygiene verification');
+        }
+
+        formData.append('staff_name', staffName.trim());
+        formData.append('inspection_shift', inspectionShift);
+        formData.append('hygiene_notes', hygieneNotes);
+        formData.append('timestamp', nowIso);
+        formData.append('captured_timestamp', nowIso);
+        if (lat !== null && lat !== undefined) formData.append('latitude', lat.toString());
+        if (lon !== null && lon !== undefined) formData.append('longitude', lon.toString());
+        formData.append('captured_location', locText);
+        formData.append('location_text', locText);
+
+        await schoolService.uploadMealImage(formData);
+        setSuccessMsg(
+          category === 'MEAL_PREPARATION'
+            ? `Photo stamped & submitted! Automated match verification against Zone ${selectedZone} (${selectedDay}) menu in progress.`
+            : 'Kitchen hygiene photo stamped & submitted for inspection review.'
+        );
+      }
+
       if (onUploadSuccess) onUploadSuccess();
 
       setTimeout(() => {
         handleCloseModal();
-      }, 1500);
+      }, 1600);
     } catch (err) {
       console.error("Submission error:", err);
-      setErrorMsg(err.response?.data?.detail || 'Failed to submit inspection photo. Please try again.');
+      setErrorMsg(err.response?.data?.detail || 'Failed to submit in-app capture. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   if (!isOpen) return null;
+
+  const currentAngleObj = EIGHT_ANGLES.find((a) => a.id === selectedAngle) || EIGHT_ANGLES[0];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs overflow-y-auto">
@@ -342,9 +482,11 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
               <Camera className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="font-bold text-sm sm:text-base text-slate-900">Staff Photo Capture</h3>
+              <h3 className="font-bold text-sm sm:text-base text-slate-900">
+                Staff Inspection & Headcount Capture
+              </h3>
               <p className="text-[11px] text-teal-700 font-medium">
-                Live in-app camera capture only • GPS & Timestamp stamped on photo
+                Live in-app capture only • GPS & Timestamp stamped • Automated Statutory Verification
               </p>
             </div>
           </div>
@@ -382,18 +524,18 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
               <button
                 type="button"
                 onClick={() => setCategory('MEAL_PREPARATION')}
-                className={`py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all ${
+                className={`py-2 px-2.5 rounded-lg text-xs font-semibold border text-center transition-all ${
                   category === 'MEAL_PREPARATION'
                     ? 'bg-teal-50 border-teal-500 text-teal-800 shadow-xs'
                     : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                 }`}
               >
-                Meal Prep
+                Meal Prep (Zone Menu)
               </button>
               <button
                 type="button"
                 onClick={() => setCategory('KITCHEN_HYGIENE')}
-                className={`py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all ${
+                className={`py-2 px-2.5 rounded-lg text-xs font-semibold border text-center transition-all ${
                   category === 'KITCHEN_HYGIENE'
                     ? 'bg-teal-50 border-teal-500 text-teal-800 shadow-xs'
                     : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
@@ -404,50 +546,248 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
               <button
                 type="button"
                 onClick={() => setCategory('STUDENT_EATING')}
-                className={`py-2 px-3 rounded-lg text-xs font-semibold border text-center transition-all ${
+                className={`py-2 px-2.5 rounded-lg text-xs font-semibold border text-center transition-all ${
                   category === 'STUDENT_EATING'
                     ? 'bg-teal-50 border-teal-500 text-teal-800 shadow-xs'
                     : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                 }`}
               >
-                Students Eating
+                Students Eating (8 Angles)
               </button>
             </div>
-            {category === 'STUDENT_EATING' && (
-              <p className="mt-2 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
-                Computer vision will count students from this image using automated detection.
-              </p>
-            )}
+
+            {/* ───────────────────────────────────────────────────────────── */}
+            {/* OPTION 1: MEAL PREPARATION - Zone Selector & 2025 Menu Card */}
+            {/* ───────────────────────────────────────────────────────────── */}
             {category === 'MEAL_PREPARATION' && (
+              <div className="mt-2.5 p-3 rounded-lg bg-teal-50/70 border border-teal-200 space-y-2.5">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-xs font-bold text-teal-900 flex items-center space-x-1.5">
+                    <UtensilsCrossed className="w-4 h-4 text-teal-700" />
+                    <span>Select School MDM Zone (2025 Revised):</span>
+                  </span>
+
+                  {/* Day Picker */}
+                  <div className="flex items-center space-x-1 bg-white border border-teal-200 rounded-md px-2 py-0.5">
+                    <Calendar className="w-3 h-3 text-teal-600" />
+                    <select
+                      value={selectedDay}
+                      onChange={(e) => setSelectedDay(e.target.value)}
+                      className="bg-transparent text-[11px] font-bold text-teal-900 focus:outline-none cursor-pointer"
+                    >
+                      {DAYS_OF_WEEK.map((d) => (
+                        <option key={d} value={d}>
+                          {d} {d === getTodayDayName() ? '(Today)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* 4 Zone Selector Pills */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {[1, 2, 3, 4].map((zId) => {
+                    const zData = AP_MDM_ZONES[zId];
+                    const isSelected = selectedZone === zId;
+                    return (
+                      <button
+                        key={zId}
+                        type="button"
+                        onClick={() => setSelectedZone(zId)}
+                        className={`p-1.5 rounded-lg text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-teal-700 text-white shadow-xs ring-2 ring-teal-400'
+                            : 'bg-white text-slate-700 border border-teal-200 hover:bg-teal-100'
+                        }`}
+                      >
+                        <div className="text-[11px] font-bold">{zData.name}</div>
+                        <div className={`text-[9px] truncate ${isSelected ? 'text-teal-200' : 'text-slate-500'}`}>
+                          {zData.districts}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Statutory Menu Verified Display */}
+                <div className="p-2.5 rounded-lg bg-white border border-teal-200 text-xs space-y-1.5 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-teal-950 flex items-center space-x-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
+                      <span>{currentZoneData.name} • {selectedDay} Mandatory Diet</span>
+                    </span>
+                    <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded border border-amber-300">
+                      AI % Match Target
+                    </span>
+                  </div>
+
+                  <p className="text-xs font-semibold text-slate-900">
+                    {currentDayMenu.title}
+                  </p>
+
+                  <div className="flex flex-wrap gap-1 pt-0.5">
+                    {currentDayMenu.items.map((it, i) => (
+                      <span key={i} className="text-[10px] font-medium bg-teal-50 text-teal-800 border border-teal-200 px-1.5 py-0.5 rounded">
+                        ✓ {it}
+                      </span>
+                    ))}
+                  </div>
+
+                  <p className="text-[10px] text-slate-500 pt-0.5">
+                    {currentDayMenu.description}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* ───────────────────────────────────────────────────────────── */}
+            {/* OPTION 2: STUDENT COUNT - 8 Angle Requirement & Slots Gallery */}
+            {/* ───────────────────────────────────────────────────────────── */}
+            {category === 'STUDENT_EATING' && (
+              <div className="mt-2.5 p-3 rounded-lg bg-teal-50 border border-teal-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-1.5 text-xs font-bold text-teal-900">
+                    <Users className="w-4 h-4 text-teal-700 shrink-0" />
+                    <span>Upload min 8 images from 8 different angles</span>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                    isEightAnglesReady
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-amber-500 text-white'
+                  }`}>
+                    {capturedAnglesCount} of 8 Captured
+                  </span>
+                </div>
+                
+                <p className="text-[11px] text-teal-800 leading-snug">
+                  To eliminate blind spots, photograph the dining hall from all 8 designated angles. Select an angle or take photos in order:
+                </p>
+
+                {/* 8 Angle Selector Pills */}
+                <div className="grid grid-cols-4 sm:grid-cols-8 gap-1 pt-1">
+                  {EIGHT_ANGLES.map((ang, idx) => {
+                    const isCaptured = Boolean(capturedAnglePhotos[idx]);
+                    const isCurrent = selectedAngle === ang.id;
+                    return (
+                      <button
+                        key={ang.id}
+                        type="button"
+                        onClick={() => setSelectedAngle(ang.id)}
+                        className={`p-1.5 rounded-md text-center transition-all cursor-pointer relative ${
+                          isCurrent
+                            ? 'bg-teal-700 text-white shadow-xs ring-2 ring-teal-400 font-bold'
+                            : isCaptured
+                            ? 'bg-emerald-50 text-emerald-900 border border-emerald-300 font-semibold'
+                            : 'bg-white text-slate-700 border border-teal-200 hover:bg-teal-100 font-medium'
+                        }`}
+                        title={`${ang.label} — ${ang.desc}`}
+                      >
+                        {isCaptured && (
+                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 text-white rounded-full flex items-center justify-center text-[8px] font-bold">
+                            ✓
+                          </span>
+                        )}
+                        <div className="text-[10px]">#{ang.id}</div>
+                        <div className="text-[8px] truncate">{ang.label}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* 8 Angle Captured Thumbnails Preview Strip */}
+                <div className="pt-1">
+                  <span className="text-[10px] font-bold text-teal-900 block mb-1">
+                    8-Angle Capture Gallery ({capturedAnglesCount}/8):
+                  </span>
+                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+                    {EIGHT_ANGLES.map((ang, idx) => {
+                      const photoObj = capturedAnglePhotos[idx];
+                      return (
+                        <div
+                          key={ang.id}
+                          className={`relative rounded-md border h-16 flex flex-col items-center justify-center overflow-hidden transition-all ${
+                            photoObj
+                              ? 'border-emerald-400 bg-black'
+                              : selectedAngle === ang.id
+                              ? 'border-dashed border-teal-500 bg-white ring-1 ring-teal-400'
+                              : 'border-dashed border-slate-300 bg-slate-50'
+                          }`}
+                        >
+                          {photoObj ? (
+                            <>
+                              <img
+                                src={photoObj.previewUrl}
+                                alt={`Angle ${ang.id}`}
+                                className="w-full h-full object-cover"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRetakeAngle(idx)}
+                                className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[8px] py-0.5 text-center hover:bg-rose-700 transition-colors"
+                                title="Retake this angle"
+                              >
+                                Retake
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAngle(ang.id)}
+                              className="w-full h-full flex flex-col items-center justify-center p-1 text-center"
+                            >
+                              <Camera className="w-3.5 h-3.5 text-slate-400 mb-0.5" />
+                              <span className="text-[8px] text-slate-500 font-bold truncate max-w-full">
+                                #{ang.id}
+                              </span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-teal-900 bg-white/80 border border-teal-200 rounded px-2.5 py-1.5 flex items-center justify-between">
+                  <span><strong>Active Camera Target:</strong> Angle {currentAngleObj.id} ({currentAngleObj.label}) — {currentAngleObj.desc}</span>
+                  <span className="text-teal-700 font-mono font-bold">Angle {currentAngleObj.id}/8</span>
+                </div>
+              </div>
+            )}
+
+            {category === 'KITCHEN_HYGIENE' && (
               <p className="mt-2 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
-                Computer vision will verify food image against menu before administrative review.
+                Kitchen sanitation photo will be verified and graded by the Mandal Educational Officer (MEO).
               </p>
             )}
           </div>
 
-          {/* Live Camera Viewfinder or Stamped Photo Preview */}
+          {/* Live Camera Viewfinder / Preview */}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
               <label className="font-semibold text-slate-700 flex items-center space-x-1.5">
                 <Camera className="w-3.5 h-3.5 text-teal-600" />
-                <span>Camera Viewfinder (Direct Capture Only)</span>
+                <span>
+                  {category === 'STUDENT_EATING'
+                    ? `Live Camera — Capturing [Angle ${currentAngleObj.id}/8: ${currentAngleObj.label}]`
+                    : 'Camera Viewfinder (Direct In-App Capture)'}
+                </span>
               </label>
 
               {/* GPS indicator pill */}
               <div className="flex items-center space-x-1 text-[11px] text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200">
                 <MapPin className="w-3 h-3 text-teal-600 shrink-0" />
-                <span className="font-mono truncate max-w-[220px]">{locationData.text}</span>
+                <span className="font-mono truncate max-w-[200px]">{locationData.text}</span>
               </div>
             </div>
 
             {/* Viewfinder Window */}
-            <div className="relative w-full h-72 sm:h-80 bg-slate-900 rounded-xl border border-slate-300 overflow-hidden flex flex-col items-center justify-center">
+            <div className="relative w-full h-72 sm:h-84 bg-slate-950 rounded-xl border border-slate-300 overflow-hidden flex flex-col items-center justify-center">
               
-              {/* If preview exists: show captured stamped photo */}
-              {previewUrl ? (
+              {/* Single photo preview (for Meal Prep / Hygiene) */}
+              {category !== 'STUDENT_EATING' && singlePreviewUrl ? (
                 <div className="relative w-full h-full flex items-center justify-center bg-black">
                   <img
-                    src={previewUrl}
+                    src={singlePreviewUrl}
                     alt="Captured Stamped Preview"
                     className="w-full h-full object-contain"
                   />
@@ -457,7 +797,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                   </div>
                   <button
                     type="button"
-                    onClick={handleRetake}
+                    onClick={handleSingleRetake}
                     className="absolute top-3 right-3 px-3 py-1.5 rounded-md bg-white/90 hover:bg-white text-slate-800 text-xs font-semibold border border-slate-200 shadow-xs flex items-center space-x-1 transition-all"
                   >
                     <RefreshCw className="w-3.5 h-3.5 text-teal-600" />
@@ -465,7 +805,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                   </button>
                 </div>
               ) : cameraActive ? (
-                /* Live Video Stream View */
+                /* Live Camera Stream */
                 <div className="relative w-full h-full bg-black">
                   <video
                     ref={videoRef}
@@ -475,48 +815,67 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                     className="w-full h-full object-cover"
                   />
 
-                  {/* Live viewfinder hud overlay */}
-                  <div className="absolute top-3 left-3 px-2.5 py-1 rounded-md bg-black/60 backdrop-blur-xs text-[10px] text-white font-mono flex items-center space-x-1.5 border border-white/20">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span>LIVE CAMERA FEED</span>
+                  {/* Top Bar HUD */}
+                  <div className="absolute top-3 inset-x-3 flex items-center justify-between pointer-events-none">
+                    <div className="flex items-center space-x-2 pointer-events-auto">
+                      <div className="px-2.5 py-1 rounded-md bg-black/60 backdrop-blur-xs text-[10px] text-white font-mono flex items-center space-x-1.5 border border-white/20">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>LIVE CAMERA</span>
+                      </div>
+
+                      {/* Flip camera button */}
+                      <button
+                        type="button"
+                        onClick={toggleFacingMode}
+                        className="p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-xs border border-white/20 transition-colors shadow-xs"
+                        title="Switch Front/Rear Camera"
+                      >
+                        <SwitchCamera className="w-3.5 h-3.5 text-white" />
+                      </button>
+                    </div>
+
+                    {category === 'STUDENT_EATING' ? (
+                      <div className="px-2.5 py-1 rounded-md bg-teal-900/90 text-teal-200 border border-teal-500/50 text-[10px] font-bold flex items-center space-x-1.5 shadow-xs pointer-events-auto">
+                        <Users className="w-3.5 h-3.5 text-teal-300" />
+                        <span>Angle {currentAngleObj.id}/8: {currentAngleObj.label}</span>
+                      </div>
+                    ) : (
+                      <div className="px-2.5 py-1 rounded-md bg-teal-900/90 text-teal-200 border border-teal-500/50 text-[10px] font-bold shadow-xs pointer-events-auto">
+                        AP MDM Zone {selectedZone} ({selectedDay})
+                      </div>
+                    )}
                   </div>
 
-                  {/* Flip camera button */}
-                  <button
-                    type="button"
-                    onClick={toggleFacingMode}
-                    className="absolute top-3 right-3 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-xs border border-white/20 transition-colors shadow-xs"
-                    title="Switch Front/Rear Camera"
-                  >
-                    <SwitchCamera className="w-4 h-4 text-white" />
-                  </button>
-
-                  {/* Live watermark target preview bar at bottom of viewfinder */}
-                  <div className="absolute bottom-0 inset-x-0 bg-slate-900/80 backdrop-blur-xs p-2.5 text-left border-t border-slate-700 flex items-center justify-between">
+                  {/* Viewfinder Bottom Controls Bar */}
+                  <div className="absolute bottom-0 inset-x-0 bg-slate-900/85 backdrop-blur-xs p-3 text-left border-t border-slate-700 flex items-center justify-between">
                     <div className="text-[10px] text-slate-200 space-y-0.5 font-mono">
                       <p className="flex items-center text-teal-300">
-                        <MapPin className="w-3 h-3 mr-1" />
-                        <span>GPS: {locationData.text}</span>
+                        <MapPin className="w-3 h-3 mr-1 shrink-0" />
+                        <span className="truncate max-w-[200px]">GPS: {locationData.text}</span>
                       </p>
                       <p className="flex items-center text-amber-300">
-                        <Clock className="w-3 h-3 mr-1" />
-                        <span>Auto-stamps exact date, time & location</span>
+                        <Clock className="w-3 h-3 mr-1 shrink-0" />
+                        <span>Auto-stamps date, time, location & official menu</span>
                       </p>
                     </div>
 
-                    {/* Capture Button */}
+                    {/* Take Photo Button */}
                     <button
                       type="button"
                       onClick={capturePhoto}
                       className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
                     >
                       <Camera className="w-4 h-4" />
-                      <span>Take Photo</span>
+                      <span>
+                        {category === 'STUDENT_EATING'
+                          ? `Take Angle ${currentAngleObj.id} Photo`
+                          : 'Take Photo'}
+                      </span>
                     </button>
                   </div>
                 </div>
               ) : (
-                /* Camera Inactive / Permission Error / Loading */
+                /* Camera Inactive / Permission Error */
                 <div className="p-6 text-center space-y-3">
                   <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 mx-auto">
                     <VideoOff className="w-6 h-6 text-amber-400" />
@@ -526,7 +885,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                       {cameraError || 'Camera Access Required'}
                     </p>
                     <p className="text-xs text-slate-300 mt-1 max-w-sm mx-auto">
-                      Direct in-app capture only. External photo uploads are disabled for tamper-evident compliance.
+                      Direct in-app capture only. External photo uploads are restricted for tamper-evident compliance.
                     </p>
                   </div>
                   <button
@@ -574,34 +933,6 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Meal Menu / Item
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Rice, Sambar, Egg"
-                value={mealType}
-                onChange={(e) => setMealType(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-600 focus:border-teal-600 placeholder-slate-400"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Menu / Preparation Description
-              </label>
-              <input
-                type="text"
-                placeholder="Fresh ingredients, clean drinking water used"
-                value={menuDescription}
-                onChange={(e) => setMenuDescription(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-600 focus:border-teal-600 placeholder-slate-400"
-              />
-            </div>
-          </div>
-
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
               Hygiene & Cleanliness Observation Notes
@@ -615,10 +946,16 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
             />
           </div>
 
-          {/* Action Buttons */}
+          {/* Action Buttons & Strict Submit Visibility Gate */}
           <div className="pt-2 flex items-center justify-between border-t border-slate-200">
             <span className="text-[11px] text-slate-500">
-              {capturedBlob ? 'Image captured and stamped' : 'Camera capture required'}
+              {category === 'STUDENT_EATING' ? (
+                isEightAnglesReady
+                  ? 'All 8 angle images captured and verified ✓'
+                  : `Capture ${capturedAnglesCount} / 8 angles to unlock submit`
+              ) : (
+                singleCapturedBlob ? 'Photo captured & stamped' : 'Camera capture required'
+              )}
             </span>
 
             <div className="flex items-center space-x-3">
@@ -631,23 +968,56 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                 Cancel
               </button>
               
-              <button
-                type="submit"
-                disabled={isSubmitting || !capturedBlob}
-                className="px-5 py-2.5 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white shadow-xs disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center space-x-1.5"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Submitting...</span>
-                  </>
+              {/* ───────────────────────────────────────────────────────────── */}
+              {/* STRICT REQUIREMENT: Submit button ONLY appears when all 8     */}
+              {/* images are captured for Student Eating!                       */}
+              {/* ───────────────────────────────────────────────────────────── */}
+              {category === 'STUDENT_EATING' ? (
+                isEightAnglesReady ? (
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-5 py-2.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs disabled:opacity-40 transition-colors flex items-center space-x-1.5 cursor-pointer animate-bounce"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Uploading 8 Angles...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>Submit All 8 Angle Images</span>
+                      </>
+                    )}
+                  </button>
                 ) : (
-                  <>
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>Submit Verified Photo</span>
-                  </>
-                )}
-              </button>
+                  <div className="px-4 py-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-xs font-bold flex items-center space-x-1.5 shadow-2xs">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                    <span>Submit locked ({capturedAnglesCount}/8 captured)</span>
+                  </div>
+                )
+              ) : (
+                singleCapturedBlob && (
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-5 py-2.5 rounded-lg text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white shadow-xs disabled:opacity-40 transition-colors flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Submitting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>Submit Verified Photo</span>
+                      </>
+                    )}
+                  </button>
+                )
+              )}
             </div>
           </div>
 
