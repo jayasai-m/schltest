@@ -434,15 +434,21 @@ def _analyze_skin_and_hands(img_or_path, img_path: Optional[str] = None) -> Dict
         cb = ycrcb[:, :, 2].astype(int)
         b, g, r = cv2.split(im)
         r_i, g_i, b_i = r.astype(int), g.astype(int), b.astype(int)
+        hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
+        h_c = (hsv[:, :, 0].astype(int) * 360) // 180
+        s_c = hsv[:, :, 1].astype(int)
 
-        # Standard YCrCb skin chrominance
-        s_std = (cr >= 133) & (cr <= 173) & (cb >= 77) & (cb <= 128) & (cr > cb) & (r_i > g_i) & (r_i - b_i >= 15)
-        # Warm RGB flesh tone
-        s_rgb = (r_i > 95) & (g_i > 40) & (b_i > 20) & (r_i > g_i + 3) & (r_i - b_i >= 15) & (cr >= 130) & (cr > cb)
-        # Pale palm flesh tone (indoor camera white balance)
-        s_palm = (r_i >= 125) & (g_i >= 100) & (b_i >= 75) & (r_i >= g_i) & (r_i - b_i >= 15) & (cr >= 127) & (cr >= cb)
-
-        skin_mask = (s_std | s_rgb | s_palm)
+        # Precise skin chrominance: warm flesh tone
+        # Skin has low-to-moderate saturation (15 <= S <= 68) and flesh hue (H <= 24 or H >= 345)
+        # Yellow turmeric dal has Hue 25..55 or S >= 70, separating skin cleanly from dal.
+        skin_mask = (
+            (cr >= 132) & (cr <= 173) &
+            (cb >= 105) & (cb <= 130) &
+            (cr > cb) &
+            (r_i > g_i) & ((r_i - b_i) >= 14) &
+            (s_c >= 15) & (s_c <= 68) &
+            ((h_c <= 24) | (h_c >= 345))
+        )
         skin_px = int(np.count_nonzero(skin_mask))
         skin_pct = (skin_px / tot) * 100.0
 
@@ -455,7 +461,7 @@ def _analyze_skin_and_hands(img_or_path, img_path: Optional[str] = None) -> Dict
             max_area = int(np.max(areas)) if len(areas) > 0 else 0
             max_blob_ratio = max_area / (thumb_h * thumb_w)
 
-        is_hand_closeup = (max_blob_ratio >= 0.18 and skin_pct >= 22.0) or (skin_pct >= 55.0)
+        is_hand_closeup = (max_blob_ratio >= 0.28 and skin_pct >= 22.0) or (skin_pct >= 38.0)
         return {
             "skin_pct": round(skin_pct, 1),
             "is_hand_closeup": is_hand_closeup,
@@ -470,6 +476,10 @@ def _analyze_skin_and_hands(img_or_path, img_path: Optional[str] = None) -> Dict
             if pil_im.mode != "RGB":
                 pil_im = pil_im.convert("RGB")
             thumb = pil_im.resize((160, 120))
+            hsv_thumb = thumb.convert("HSV")
+            h_chan, s_chan, _ = hsv_thumb.split()
+            h_bytes = h_chan.tobytes()
+            s_bytes = s_chan.tobytes()
             tot = 160 * 120
 
             if np is not None:
@@ -481,10 +491,17 @@ def _analyze_skin_and_hands(img_or_path, img_path: Optional[str] = None) -> Dict
                 cr = 128.0 + 0.500 * r - 0.418688 * g - 0.081312 * b
                 cb = 128.0 - 0.168736 * r - 0.331264 * g + 0.500 * b
 
-                s_std = (cr >= 133) & (cr <= 173) & (cb >= 77) & (cb <= 128) & (cr > cb) & (r > g) & (r - b >= 15)
-                s_rgb = (r > 95) & (g > 40) & (b > 20) & (r > g + 3) & (r - b >= 15) & (cr >= 130) & (cr > cb)
-                s_palm = (r >= 125) & (g >= 100) & (b >= 75) & (r >= g) & (r - b >= 15) & (cr >= 127) & (cr >= cb)
-                skin = s_std | s_rgb | s_palm
+                h_arr = (np.frombuffer(h_bytes, dtype=np.uint8).reshape((120, 160)).astype(int) * 360) // 255
+                s_arr = np.frombuffer(s_bytes, dtype=np.uint8).reshape((120, 160)).astype(int)
+
+                skin = (
+                    (cr >= 132) & (cr <= 173) &
+                    (cb >= 105) & (cb <= 130) &
+                    (cr > cb) &
+                    (r > g) & ((r - b) >= 14) &
+                    (s_arr >= 15) & (s_arr <= 68) &
+                    ((h_arr <= 24) | (h_arr >= 345))
+                )
                 skin_pct = (np.count_nonzero(skin) / tot) * 100.0
 
                 # Connected components via fast BFS labeling
@@ -509,21 +526,21 @@ def _analyze_skin_and_hands(img_or_path, img_path: Optional[str] = None) -> Dict
 
                 max_area = max(components) if components else 0
                 max_blob_ratio = max_area / tot
-                is_hand_closeup = (max_blob_ratio >= 0.18 and skin_pct >= 22.0) or (skin_pct >= 55.0)
+                is_hand_closeup = (max_blob_ratio >= 0.28 and skin_pct >= 22.0) or (skin_pct >= 38.0)
                 skin_mask = skin
             else:
                 pix = list(thumb.getdata())
                 skin_cnt = 0
-                for r_val, g_val, b_val in pix:
+                for idx, (r_val, g_val, b_val) in enumerate(pix):
+                    h_deg = (h_bytes[idx] * 360) // 255
+                    s_val = s_bytes[idx]
                     cr = 128.0 + 0.500 * r_val - 0.418688 * g_val - 0.081312 * b_val
                     cb = 128.0 - 0.168736 * r_val - 0.331264 * g_val + 0.500 * b_val
-                    is_s = (133 <= cr <= 173 and 77 <= cb <= 128 and cr > cb) or \
-                           (r_val > 95 and g_val > 40 and b_val > 20 and r_val > g_val + 3 and r_val > b_val + 10 and cr >= 130 and cr > cb) or \
-                           (r_val >= 130 and g_val >= 115 and b_val >= 95 and r_val >= g_val and r_val >= b_val + 4 and cr >= 129 and cr > cb)
+                    is_s = (132 <= cr <= 173 and 105 <= cb <= 130 and cr > cb and r_val > g_val and (r_val - b_val >= 14) and 15 <= s_val <= 68 and (h_deg <= 24 or h_deg >= 345))
                     if is_s:
                         skin_cnt += 1
                 skin_pct = (skin_cnt / tot) * 100.0
-                is_hand_closeup = skin_pct >= 45.0
+                is_hand_closeup = skin_pct >= 38.0
 
         except Exception as e:
             logger.warning(f"Pillow skin analysis warning: {e}")
@@ -587,38 +604,41 @@ def _detect_indian_food_items_pillow(img_path: str) -> Tuple[List[str], List[str
             s = s_bytes[i]
             v = v_bytes[i]
 
-            # 1. Green leafy vegetables (G strictly exceeds R and B; Hue in 70..175 degrees)
-            if 70 <= h <= 175 and s >= 40 and (g_val - r_val >= 12) and (g_val - b_val >= 15):
-                green_cnt += 1
-            # 2. Dal: yellow-amber lentils with rich turmeric saturation (Hue in 16..68 degrees, R-B >= 35)
-            elif 16 <= h <= 68 and s >= 65 and v >= 60 and (r_val - b_val >= 35) and (r_val >= g_val) and (g_val - b_val >= 15):
-                dal_cnt += 1
-                if 16 <= h <= 55 and s >= 80 and v >= 120:
+            cr = 128.0 + 0.500 * r_val - 0.418688 * g_val - 0.081312 * b_val
+            cb = 128.0 - 0.168736 * r_val - 0.331264 * g_val + 0.500 * b_val
+            is_skin_px = (132 <= cr <= 173 and 105 <= cb <= 130 and cr > cb and r_val > g_val and (r_val - b_val >= 14) and 15 <= s <= 68 and (h <= 24 or h >= 345))
+
+            if not is_skin_px:
+                # 1. White rice: neutral high luminance, low saturation
+                if s <= 52 and v >= 125 and abs(r_val - g_val) <= 24 and abs(r_val - b_val) <= 28:
+                    wr_cnt += 1
+                # 2. Boiled egg: high-luminance white/cream highlight
+                if s <= 45 and v >= 150 and abs(r_val - g_val) <= 18 and abs(r_val - b_val) <= 22:
+                    egg_cnt += 1
+                # 3. Dal: yellow-amber lentils with rich turmeric saturation
+                if 8 <= h <= 55 and s >= 30 and v >= 35 and (r_val >= g_val) and (r_val - b_val >= 10):
+                    dal_cnt += 1
+                # 4. Green / Leafy vegetables & mixed vegetable curry
+                if (25 <= h <= 110 and s >= 20 and v >= 20) or (g_val >= r_val and g_val - b_val >= 6):
+                    green_cnt += 1
+                # 5. Egg curry / fry: red-amber spices
+                if h <= 28 and s >= 45 and v >= 35 and (r_val - g_val >= 12):
                     curry_egg_cnt += 1
-            # 3. White rice: neutral achromatic, bright, low saturation
-            elif s <= 25 and v >= 165 and abs(r_val - g_val) <= 8 and abs(r_val - b_val) <= 10:
-                wr_cnt += 1
-            # 4. Spiced rice: turmeric gold / saffron rice
-            elif 25 <= h <= 70 and 50 <= s <= 170 and v >= 110 and (r_val - b_val >= 35):
-                sr_cnt += 1
-            # 5. Boiled egg: pure white highlight
-            elif s <= 20 and v >= 210 and abs(r_val - g_val) <= 8 and abs(r_val - b_val) <= 10:
-                egg_cnt += 1
-            # 6. Egg curry / fry: red-amber spices
-            elif h <= 40 and s >= 80 and v >= 50 and (r_val - g_val >= 30) and (r_val - b_val >= 50):
-                curry_egg_cnt += 1
-            # 7. Chikki: jaggery brown
-            elif 20 <= h <= 52 and 80 <= s <= 210 and 45 <= v <= 160 and (r_val - b_val >= 30):
-                chikki_cnt += 1
-            # 8. Ragi Java: dark purple-grey
-            elif v <= 90 and s <= 35 and abs(r_val - g_val) <= 10 and abs(r_val - b_val) <= 10:
-                ragi_cnt += 1
-            # 9. Sweet Pongal: caramel jaggery rice
-            elif 24 <= h <= 56 and 65 <= s <= 180 and 70 <= v <= 190:
-                pongal_cnt += 1
-            # 10. Steel Plate / Vessel: neutral metallic grey
-            elif s <= 22 and 65 <= v <= 220 and abs(r_val - g_val) <= 6 and abs(r_val - b_val) <= 6:
-                plate_cnt += 1
+                # 6. Flavored / spiced rice: turmeric gold
+                if 14 <= h <= 45 and 35 <= s <= 180 and v >= 85:
+                    sr_cnt += 1
+                # 7. Peanut chikki: jaggery brown
+                if 10 <= h <= 32 and 65 <= s <= 230 and 40 <= v <= 180 and (r_val - b_val >= 25):
+                    chikki_cnt += 1
+                # 8. Ragi Java: dark beverage
+                if v <= 95 and s <= 40 and abs(r_val - g_val) <= 12 and abs(r_val - b_val) <= 12:
+                    ragi_cnt += 1
+                # 9. Sweet pongal
+                if 12 <= h <= 34 and 55 <= s <= 185 and 60 <= v <= 195:
+                    pongal_cnt += 1
+                # 10. Steel plate / vessel: neutral metallic grey
+                if s <= 30 and 55 <= v <= 225 and abs(r_val - g_val) <= 12 and abs(r_val - b_val) <= 12:
+                    plate_cnt += 1
 
         wr_ratio = wr_cnt / tot
         sr_ratio = sr_cnt / tot
@@ -626,52 +646,58 @@ def _detect_indian_food_items_pillow(img_path: str) -> Tuple[List[str], List[str
         green_ratio = green_cnt / tot
         plate_ratio = plate_cnt / tot
 
-        # Food context guard: White rice and eggs MUST be accompanied by dal, greens, or plate
-        has_food_presence = (dal_ratio >= 0.025) or (green_ratio >= 0.020) or (plate_ratio >= 0.040 and dal_ratio >= 0.010)
-
-        if has_food_presence and wr_ratio >= 0.035:
+        # 1. White rice
+        if wr_ratio >= 0.020:
             detected_dishes.append("White Rice (Steamed Rice)")
             detected_dishes.append("Cooked Rice (Chawal)")
 
-        if has_food_presence and sr_ratio >= 0.040 and wr_ratio < 0.12:
+        # 2. Boiled eggs
+        if egg_cnt / tot >= 0.005:
+            detected_dishes.append("Boiled Egg")
+            detected_dishes.append("Boiled Eggs")
+
+        # 3. Dal / Sambar / Rasam / Leafy Dal
+        if dal_ratio >= 0.015:
+            detected_dishes.append("Dal / Pappu (Lentil Curry)")
+            detected_dishes.append("Dal / Sambar (Lentil Curry)")
+            detected_dishes.append("Sambar (Vegetable Sambar)")
+            detected_dishes.append("Rasam / Charu (Lentil Pepper Broth)")
+            detected_dishes.append("Leafy Dal (Akurapappu / Palakura Pappu)")
+
+        # 4. Green / Leafy vegetables & Mixed Veg Curry / Aloo Kurma
+        if green_ratio >= 0.015:
+            if "Leafy Dal (Akurapappu / Palakura Pappu)" not in detected_dishes:
+                detected_dishes.append("Leafy Dal (Akurapappu / Palakura Pappu)")
+            detected_dishes.append("Mixed Vegetable Curry / Sabzi")
+            detected_dishes.append("Vegetable Sabzi / Greens")
+            detected_dishes.append("Aloo Kurma (Potato Curry)")
+
+        # 5. Egg curry / fry
+        if curry_egg_cnt / tot >= 0.010:
+            detected_dishes.append("Egg Curry")
+            detected_dishes.append("Egg Fry / Spiced Egg")
+
+        # 6. Spiced / flavored rice
+        if sr_ratio >= 0.035 and wr_ratio < 0.12:
             detected_dishes.append("Flavored / Spiced Rice (Palav / Biryani / Pulagam)")
             detected_dishes.append("Tamarind / Lemon Rice (Pulihora / Chitrannam)")
             if "Cooked Rice (Chawal)" not in detected_dishes:
                 detected_dishes.append("Cooked Rice (Chawal)")
 
-        if dal_ratio >= 0.025:
-            detected_dishes.append("Dal / Pappu (Lentil Curry)")
-            detected_dishes.append("Dal / Sambar (Lentil Curry)")
-            detected_dishes.append("Sambar (Vegetable Sambar)")
-            detected_dishes.append("Rasam / Charu (Lentil Pepper Broth)")
-            if green_ratio >= 0.020:
-                detected_dishes.append("Leafy Dal (Akurapappu / Palakura Pappu)")
-        elif green_ratio >= 0.025:
-            detected_dishes.append("Leafy Dal (Akurapappu / Palakura Pappu)")
-
-        if green_ratio >= 0.020:
-            detected_dishes.append("Mixed Vegetable Curry / Sabzi")
-            detected_dishes.append("Vegetable Sabzi / Greens")
-            detected_dishes.append("Aloo Kurma (Potato Curry)")
-
-        if has_food_presence and egg_cnt / tot >= 0.008:
-            detected_dishes.append("Boiled Egg")
-            detected_dishes.append("Boiled Eggs")
-
-        if curry_egg_cnt / tot >= 0.015:
-            detected_dishes.append("Egg Curry")
-            detected_dishes.append("Egg Fry / Spiced Egg")
-
-        if chikki_cnt / tot >= 0.010:
+        # 7. Peanut chikki
+        if chikki_cnt / tot >= 0.008:
             detected_dishes.append("Peanut Chikki (Snack)")
 
+        # 8. Ragi-Java
         if ragi_cnt / tot >= 0.025:
             detected_dishes.append("Ragi-Java (Nutritional Malt Drink)")
 
-        if pongal_cnt / tot >= 0.035 and wr_ratio < 0.12:
+        # 9. Sweet pongal
+        if pongal_cnt / tot >= 0.030 and wr_ratio < 0.12:
             detected_dishes.append("Sweet Pongal (Bellam Pongali)")
 
-        if plate_ratio >= 0.040:
+        # 10. Steel dining thali / vessel
+        if plate_ratio >= 0.025:
             detected_dishes.append("Steel Thali / Dining Vessel")
 
         metrics = {
@@ -701,14 +727,11 @@ def _detect_indian_food_items_opencv(img, img_path: str) -> Tuple[List[str], Lis
         "plate_ratio": 0.0
     }
 
-    # 1. Skin & Hand Analysis
-    skin_res = _analyze_skin_and_hands(img, img_path)
-
-    # 2. YOLOv8m detection for culinary vessels and tableware
+    # 1. YOLOv8m detection for culinary vessels and tableware
     det_model = _get_det_model()
     if det_model is not None:
         try:
-            res_det = det_model(img_path, conf=0.35, verbose=False)[0]
+            res_det = det_model(img_path, conf=0.30, verbose=False)[0]
             for b in res_det.boxes:
                 c_name = det_model.names[int(b.cls[0])]
                 conf = float(b.conf[0])
@@ -719,128 +742,117 @@ def _detect_indian_food_items_opencv(img, img_path: str) -> Tuple[List[str], Lis
 
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+    cr = ycrcb[:, :, 1].astype(int)
+    cb = ycrcb[:, :, 2].astype(int)
     b, g, r = cv2.split(img)
     r_i, g_i, b_i = r.astype(int), g.astype(int), b.astype(int)
-    skin_mask = skin_res.get("skin_mask")
-    non_skin = (skin_mask == False) if skin_mask is not None else np.ones((h, w), dtype=bool)
 
     h_c, s_c, v_c = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+    h_deg = (h_c.astype(int) * 360) // 180
 
-    # 3. Dal / Sambar / Rasam / Lentil Stews — rich turmeric saturation & chrominance (strictly non-skin)
-    dal_bool = non_skin & (h_c >= 10) & (h_c <= 42) & (s_c >= 70) & (v_c >= 65) & ((r_i - b_i) >= 40) & (r_i >= g_i) & ((g_i - b_i) >= 15)
-    dal_ratio = float(np.count_nonzero(dal_bool) / total_px)
+    # Non-skin mask: human hand/skin cannot be counted as mid-day meal components
+    is_skin = (
+        (cr >= 132) & (cr <= 173) &
+        (cb >= 105) & (cb <= 130) &
+        (cr > cb) &
+        (r_i > g_i) & ((r_i - b_i) >= 14) &
+        (s_c >= 15) & (s_c <= 68) &
+        ((h_deg <= 24) | (h_deg >= 345))
+    )
+    non_skin = ~is_skin
 
-    # 4. Green Leafy Vegetables (Palak, Gongura, Thotakura, Methi) — G strictly exceeds R and B
-    green_bool = ((g_i - r_i) >= 10) & ((g_i - b_i) >= 14) & (h_c >= 35) & (h_c <= 88) & (s_c >= 35)
-    green_ratio = float(np.count_nonzero(green_bool) / total_px)
-
-    # 5. Steel Dining Thali / Compartment Plate / Vessel — neutral metallic grey
-    plate_bool = (s_c <= 22) & (v_c >= 65) & (v_c <= 220) & (np.abs(r_i - g_i) <= 6) & (np.abs(r_i - b_i) <= 6)
+    # 2. Steel Dining Thali / Compartment Plate / Vessel — neutral metallic grey
+    plate_bool = non_skin & (s_c <= 30) & (v_c >= 55) & (v_c <= 225) & (np.abs(r_i - g_i) <= 12) & (np.abs(r_i - b_i) <= 12)
     plate_ratio = float(np.count_nonzero(plate_bool) / total_px)
 
-    # Food presence confirmation: requires genuine vessels or plate or green veg or dal in non-skin
-    has_food_presence = (len(yolo_food_vessels) >= 1) or (plate_ratio >= 0.035) or (green_ratio >= 0.015) or (dal_ratio >= 0.020)
-
-    # 6. Steamed White Rice (Chawal / Anna) — neutral achromatic, bright, low saturation, non-skin
-    wr_bool = non_skin & (v_c >= 170) & (s_c <= 25) & (np.abs(r_i - g_i) <= 8) & (np.abs(r_i - b_i) <= 10)
+    # 3. Steamed White Rice (Chawal / Anna)
+    wr_bool = non_skin & (s_c <= 52) & (v_c >= 125) & (np.abs(r_i - g_i) <= 24) & (np.abs(r_i - b_i) <= 28)
     white_rice_ratio = float(np.count_nonzero(wr_bool) / total_px)
-    if has_food_presence and white_rice_ratio >= 0.035:
+    if white_rice_ratio >= 0.020:
         detected_dishes.append("White Rice (Steamed Rice)")
         detected_dishes.append("Cooked Rice (Chawal)")
 
-    # 7. Flavored / Spiced Rice (Veg Palav / Biryani / Pulihora / Tamarind Rice / Lemon Rice / Pulagam)
-    sr_bool = non_skin & (h_c >= 14) & (h_c <= 36) & (s_c >= 50) & (s_c <= 170) & (v_c >= 110) & ((r_i - b_i) >= 35)
-    spiced_rice_ratio = float(np.count_nonzero(sr_bool) / total_px)
-    if has_food_presence and spiced_rice_ratio >= 0.040 and white_rice_ratio < 0.12:
-        detected_dishes.append("Flavored / Spiced Rice (Palav / Biryani / Pulagam)")
-        detected_dishes.append("Tamarind / Lemon Rice (Pulihora / Chitrannam)")
-        if "Cooked Rice (Chawal)" not in detected_dishes:
-            detected_dishes.append("Cooked Rice (Chawal)")
-
-    if dal_ratio >= 0.025:
-        detected_dishes.append("Dal / Pappu (Lentil Curry)")
-        detected_dishes.append("Dal / Sambar (Lentil Curry)")
-        detected_dishes.append("Sambar (Vegetable Sambar)")
-        detected_dishes.append("Rasam / Charu (Lentil Pepper Broth)")
-        if green_ratio >= 0.020:
-            detected_dishes.append("Leafy Dal (Akurapappu / Palakura Pappu)")
-    elif green_ratio >= 0.025:
-        detected_dishes.append("Leafy Dal (Akurapappu / Palakura Pappu)")
-
-    # 8. Boiled Eggs (Smooth white/cream oval contours)
-    egg_bool = (v_c >= 210) & (s_c <= 20) & (np.abs(r_i - g_i) <= 8) & (np.abs(r_i - b_i) <= 10)
+    # 4. Boiled Eggs (white/cream surface and oval contours)
+    egg_bool = non_skin & (v_c >= 150) & (s_c <= 45) & (r_i >= 140) & (g_i >= 135) & (b_i >= 120) & (np.abs(r_i - g_i) <= 18) & (np.abs(r_i - b_i) <= 22)
+    egg_ratio = float(np.count_nonzero(egg_bool) / total_px)
     egg_mask = (egg_bool.astype(np.uint8)) * 255
     contours, _ = cv2.findContours(egg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     oval_count = 0
     for cnt in contours:
         area = cv2.contourArea(cnt)
-        if 400 < area < (total_px * 0.035):
-            peri = cv2.arcLength(cnt, True)
-            if peri > 0:
-                circularity = 4 * np.pi * (area / (peri * peri))
-                if circularity > 0.60:
-                    oval_count += 1
-    if has_food_presence and (oval_count >= 1 or any('egg' in str(v).lower() for v in yolo_food_vessels)):
+        if area > 80:
+            x, y, bw, bh = cv2.boundingRect(cnt)
+            asp = bw / max(bh, 1)
+            if 0.40 <= asp <= 2.50:
+                oval_count += 1
+    if oval_count >= 1 or egg_ratio >= 0.005 or any('egg' in str(v).lower() for v in yolo_food_vessels):
         detected_dishes.append("Boiled Egg")
         detected_dishes.append("Boiled Eggs")
 
-    # 9. Egg Curry & Egg Fry / Spiced Egg
-    curry_egg_bool = (h_c <= 20) & (s_c >= 80) & (v_c >= 50) & ((r_i - g_i) >= 30) & ((r_i - b_i) >= 50)
-    curry_egg_mask = (curry_egg_bool.astype(np.uint8)) * 255
-    ce_contours, _ = cv2.findContours(curry_egg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    ce_count = 0
-    for cnt in ce_contours:
-        area = cv2.contourArea(cnt)
-        if 500 < area < (total_px * 0.035):
-            peri = cv2.arcLength(cnt, True)
-            if peri > 0:
-                circ = 4 * np.pi * (area / (peri * peri))
-                if 0.45 <= circ <= 0.88:
-                    ce_count += 1
-    if ce_count >= 1:
-        detected_dishes.append("Egg Curry")
-        detected_dishes.append("Egg Fry / Spiced Egg")
+    # 5. Dal / Sambar / Rasam / Lentil Stews
+    dal_bool = non_skin & (h_deg >= 8) & (h_deg <= 55) & (s_c >= 30) & (v_c >= 35) & (r_i >= g_i) & ((r_i - b_i) >= 10)
+    dal_ratio = float(np.count_nonzero(dal_bool) / total_px)
+    if dal_ratio >= 0.015:
+        detected_dishes.append("Dal / Pappu (Lentil Curry)")
+        detected_dishes.append("Dal / Sambar (Lentil Curry)")
+        detected_dishes.append("Sambar (Vegetable Sambar)")
+        detected_dishes.append("Rasam / Charu (Lentil Pepper Broth)")
+        detected_dishes.append("Leafy Dal (Akurapappu / Palakura Pappu)")
 
-    # 10. Vegetable Curry & Aloo Kurma
-    kurma_bool = (h_c >= 16) & (h_c <= 36) & (s_c >= 60) & (s_c <= 210) & (v_c >= 60) & (v_c <= 240)
-    kurma_ratio = float(np.count_nonzero(kurma_bool) / total_px)
-    if green_ratio >= 0.020 or kurma_ratio >= 0.040:
+    # 6. Green Leafy Vegetables & Mixed Veg Curry / Aloo Kurma
+    green_bool = non_skin & (((h_deg >= 25) & (h_deg <= 110) & (s_c >= 20) & (v_c >= 20)) | ((g_i >= r_i) & ((g_i - b_i) >= 6)))
+    green_ratio = float(np.count_nonzero(green_bool) / total_px)
+    if green_ratio >= 0.015:
+        if "Leafy Dal (Akurapappu / Palakura Pappu)" not in detected_dishes:
+            detected_dishes.append("Leafy Dal (Akurapappu / Palakura Pappu)")
         detected_dishes.append("Mixed Vegetable Curry / Sabzi")
         detected_dishes.append("Vegetable Sabzi / Greens")
         detected_dishes.append("Aloo Kurma (Potato Curry)")
 
-    # 11. Chutneys (Gongura, Tomato, Pudina, Groundnut)
-    red_chutney_bool = non_skin & (h_c <= 12) & (s_c >= 80) & (v_c >= 60) & (v_c <= 230)
+    # 7. Egg Curry & Egg Fry / Spiced Egg
+    curry_egg_bool = non_skin & (h_deg <= 28) & (s_c >= 45) & (v_c >= 35) & ((r_i - g_i) >= 12)
+    curry_egg_ratio = float(np.count_nonzero(curry_egg_bool) / total_px)
+    if curry_egg_ratio >= 0.008:
+        detected_dishes.append("Egg Curry")
+        detected_dishes.append("Egg Fry / Spiced Egg")
+
+    # 8. Flavored / Spiced Rice (Veg Palav / Biryani / Pulihora / Tamarind Rice / Lemon Rice / Pulagam)
+    sr_bool = non_skin & (h_deg >= 14) & (h_deg <= 45) & (s_c >= 35) & (s_c <= 180) & (v_c >= 85) & ((r_i - b_i) >= 25)
+    spiced_rice_ratio = float(np.count_nonzero(sr_bool) / total_px)
+    if spiced_rice_ratio >= 0.035 and white_rice_ratio < 0.12:
+        detected_dishes.append("Flavored / Spiced Rice (Palav / Biryani / Pulagam)")
+        detected_dishes.append("Tamarind / Lemon Rice (Pulihora / Chitrannam)")
+        if "Cooked Rice (Chawal)" not in detected_dishes:
+            detected_dishes.append("Cooked Rice (Chawal)")
+
+    # 9. Chutneys (Gongura, Tomato, Pudina, Groundnut)
+    red_chutney_bool = non_skin & (h_deg <= 14) & (s_c >= 70) & (v_c >= 50) & (v_c <= 230)
     red_chutney_ratio = float(np.count_nonzero(red_chutney_bool) / total_px)
-    if has_food_presence and 0.008 <= red_chutney_ratio <= 0.06:
+    if 0.008 <= red_chutney_ratio <= 0.08:
         detected_dishes.append("Chutney (Gongura / Tomato / Pudina / Groundnut)")
 
-    # 12. Peanut Chikki (Snack)
-    chikki_bool = non_skin & (h_c >= 10) & (h_c <= 26) & (s_c >= 80) & (s_c <= 210) & (v_c >= 45) & (v_c <= 160) & ((r_i - b_i) >= 30)
+    # 10. Peanut Chikki (Snack)
+    chikki_bool = non_skin & (h_deg >= 10) & (h_deg <= 32) & (s_c >= 65) & (s_c <= 230) & (v_c >= 40) & (v_c <= 180) & ((r_i - b_i) >= 25)
     chikki_ratio = float(np.count_nonzero(chikki_bool) / total_px)
-    if has_food_presence and 0.008 <= chikki_ratio <= 0.06:
-        chikki_mask = (chikki_bool.astype(np.uint8)) * 255
-        chikki_pixels = cv2.bitwise_and(gray, gray, mask=chikki_mask)
-        edges = cv2.Canny(chikki_pixels, 50, 150)
-        edge_density = np.count_nonzero(edges) / max(np.count_nonzero(chikki_mask), 1)
-        if edge_density > 0.06:
-            detected_dishes.append("Peanut Chikki (Snack)")
+    if chikki_ratio >= 0.008:
+        detected_dishes.append("Peanut Chikki (Snack)")
 
-    # 13. Ragi-Java
-    ragi_bool = non_skin & (v_c <= 90) & (s_c <= 35) & (np.abs(r_i - g_i) <= 10) & (np.abs(r_i - b_i) <= 10)
+    # 11. Ragi-Java
+    ragi_bool = non_skin & (v_c <= 95) & (s_c <= 40) & (np.abs(r_i - g_i) <= 12) & (np.abs(r_i - b_i) <= 12)
     ragi_ratio = float(np.count_nonzero(ragi_bool) / total_px)
     has_cup = any(('cup' in v.lower() or 'bowl' in v.lower() or 'bottle' in v.lower()) for v in yolo_food_vessels)
-    if (ragi_ratio >= 0.015 and has_cup) or (has_food_presence and ragi_ratio >= 0.030):
+    if (ragi_ratio >= 0.015 and has_cup) or (ragi_ratio >= 0.035):
         detected_dishes.append("Ragi-Java (Nutritional Malt Drink)")
 
-    # 14. Sweet Pongal / Bellam Pongali
-    pongal_bool = non_skin & (h_c >= 12) & (h_c <= 28) & (s_c >= 65) & (s_c <= 180) & (v_c >= 70) & (v_c <= 190)
+    # 12. Sweet Pongal / Bellam Pongali
+    pongal_bool = non_skin & (h_deg >= 12) & (h_deg <= 34) & (s_c >= 55) & (s_c <= 185) & (v_c >= 60) & (v_c <= 195)
     pongal_ratio = float(np.count_nonzero(pongal_bool) / total_px)
-    if has_food_presence and pongal_ratio >= 0.035 and white_rice_ratio < 0.12:
+    if pongal_ratio >= 0.030 and white_rice_ratio < 0.12:
         detected_dishes.append("Sweet Pongal (Bellam Pongali)")
 
-    # 15. Steel Dining Thali / Compartment Plate / Vessel
-    if (plate_ratio >= 0.040 or len(yolo_food_vessels) >= 1) and has_food_presence:
+    # 13. Steel Dining Thali / Compartment Plate / Vessel
+    if plate_ratio >= 0.025 or len(yolo_food_vessels) >= 1:
         detected_dishes.append("Steel Thali / Dining Vessel")
 
     metrics = {
@@ -1125,11 +1137,10 @@ def food_quality_check(
         # 3. Precise Skin and Hand Analysis Guard
         skin_analysis = _analyze_skin_and_hands(img, image_path)
         plate_found = any("thali" in d.lower() or "vessel" in d.lower() for d in detected_dishes) or len(yolo_vessels) >= 1 or metrics.get("plate_ratio", 0) >= 0.035
-        green_found = metrics.get("green_ratio", 0) >= 0.015
 
         # Strict Hand / Palm Rejection Guard:
-        # A close-up of a human hand/palm with no genuine tableware vessels or plates must be flagged immediately!
-        if (skin_analysis["is_hand_closeup"] or skin_analysis["skin_pct"] >= 25.0) and not plate_found and not green_found and len(yolo_vessels) == 0:
+        # A close-up of a human hand/palm dominates the frame and must be flagged immediately!
+        if skin_analysis["is_hand_closeup"]:
             return {
                 "cv_status": "CV_FLAG",
                 "cv_notes": f"Human hand/skin detected ({skin_analysis['skin_pct']:.1f}% of frame). No mid-day meal or cooking vessels visible. Photo flagged for inspection review.",
@@ -1208,8 +1219,8 @@ def food_quality_check(
             all_found += [v.split()[0].title() for v in yolo_vessels if v.split()[0].title() not in all_found]
         found_str = ", ".join(all_found[:8])
 
-        # Flag if under 50% statutory menu compliance or missing core components
-        is_pass = (match_pct >= 50.0) and (len(core_foods) >= 1 or plate_found)
+        # A meal passes if menu match >= 50% or if at least 2 core dishes / plate verified with >= 33.3% match
+        is_pass = (match_pct >= 50.0) or (match_pct >= 33.3 and (len(core_foods) >= 2 or plate_found))
         status = "CV_PASS" if is_pass else "CV_FLAG"
 
         confidence = 0.95 if any(f in detected_dishes for f in ["White Rice (Steamed Rice)", "Cooked Rice (Chawal)", "Dal / Sambar (Lentil Curry)", "Boiled Egg"]) else 0.88
