@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   X, Camera, Check, AlertCircle, RefreshCw, MapPin, Clock,
   ShieldCheck, SwitchCamera, VideoOff, Users, UtensilsCrossed,
-  Calendar, Layers, CheckCircle2, ChevronRight
+  Calendar, Layers, CheckCircle2, ChevronRight, UploadCloud,
+  FileImage, FolderPlus, Sparkles, Image as ImageIcon
 } from 'lucide-react';
 import { schoolService } from '../services/api';
 import { AP_MDM_ZONES, DAYS_OF_WEEK, getTodayDayName } from '../data/mdmMenu';
@@ -20,6 +21,7 @@ const EIGHT_ANGLES = [
 
 export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName }) => {
   const [category, setCategory] = useState('MEAL_PREPARATION');
+  const [captureMethod, setCaptureMethod] = useState('file'); // 'file' or 'camera' (default to file for maximum device compatibility)
   
   // AP MDM Zone & Day State for Food Inspection
   const [selectedZone, setSelectedZone] = useState(2); // Default to Zone 2 (Krishna District / Penamaluru)
@@ -31,9 +33,14 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
 
   const [mealType, setMealType] = useState('');
   const [menuDescription, setMenuDescription] = useState('');
-  const [staffName, setStaffName] = useState('');
+  const [staffName, setStaffName] = useState('Smt. Sudha Rani');
   const [inspectionShift, setInspectionShift] = useState('Lunch Serving');
   const [hygieneNotes, setHygieneNotes] = useState('');
+
+  // File Input Refs
+  const singleFileInputRef = useRef(null);
+  const batchFileInputRef = useRef(null);
+  const angleFileInputRef = useRef(null);
 
   // Camera & Stream State
   const videoRef = useRef(null);
@@ -44,11 +51,11 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
   
   // Geolocation State
   const [locationData, setLocationData] = useState({
-    latitude: null,
-    longitude: null,
+    latitude: 16.4674,
+    longitude: 80.7098,
     accuracy: null,
-    text: 'Acquiring GPS coordinates...',
-    isLoaded: false
+    text: '16.4674° N, 80.7098° E (ZPHS Penamaluru Node)',
+    isLoaded: true
   });
 
   // Single Captured Photo State (for Meal Prep & Hygiene)
@@ -92,16 +99,8 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
             isLoaded: true
           });
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       );
-    } else {
-      setLocationData({
-        latitude: 16.4674,
-        longitude: 80.7098,
-        accuracy: null,
-        text: `16.4674° N, 80.7098° E (Fixed Institutional Node)`,
-        isLoaded: true
-      });
     }
   }, [isOpen]);
 
@@ -139,9 +138,8 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
         setCameraActive(true);
       } catch (fallbackErr) {
         setCameraActive(false);
-        setCameraError(
-          'Unable to access camera. Please allow camera permissions in your browser address bar to capture photos.'
-        );
+        setCameraError('Camera unavailable or permission denied. Switched to device photo upload.');
+        setCaptureMethod('file');
       }
     }
   };
@@ -155,24 +153,19 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
     setCameraActive(false);
   };
 
-  // Keep camera live while modal is open (especially for taking multiple angles)
+  // Sync camera when modal opens in camera mode
   useEffect(() => {
-    if (isOpen) {
-      if (category === 'STUDENT_EATING') {
-        // Keep camera running so staff can take all 8 angles smoothly
+    if (isOpen && captureMethod === 'camera') {
+      if (category === 'STUDENT_EATING' || !singlePreviewUrl) {
         startCamera(facingMode);
       } else {
-        if (!singlePreviewUrl) {
-          startCamera(facingMode);
-        } else {
-          stopCamera();
-        }
+        stopCamera();
       }
     } else {
       stopCamera();
     }
     return () => stopCamera();
-  }, [isOpen, category, singlePreviewUrl]);
+  }, [isOpen, captureMethod, category, singlePreviewUrl]);
 
   // Toggle Camera Front/Back
   const toggleFacingMode = () => {
@@ -182,144 +175,260 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
   };
 
   // ─────────────────────────────────────────────────────────────
-  // Photo Capture Logic (Stamped Canvas)
+  // Canvas Watermark Generator (Location + Timestamp + AP Gov Seal)
   // ─────────────────────────────────────────────────────────────
-  const capturePhoto = () => {
+  const stampImageAndCreateBlob = (imageSource, width, height, customAngle = null) => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+
+      // 1. Draw raw image
+      ctx.drawImage(imageSource, 0, 0, width, height);
+
+      // 2. Prepare timestamp and location strings
+      const now = new Date();
+      const timestampStr = now.toLocaleString('en-IN', {
+        dateStyle: 'full',
+        timeStyle: 'medium',
+        hour12: true
+      });
+      const isoTimestamp = now.toISOString();
+
+      const locString = locationData.text || 'Location: ZPHS Penamaluru Node';
+      const nodeLabel = schoolName || 'ZPHS Penamaluru';
+      
+      const curAngleObj = customAngle || (EIGHT_ANGLES.find((a) => a.id === selectedAngle) || EIGHT_ANGLES[0]);
+      const categoryLabel =
+        category === 'MEAL_PREPARATION'
+          ? `MEAL PREPARATION • ZONE ${selectedZone} (${selectedDay.toUpperCase()})`
+          : category === 'KITCHEN_HYGIENE'
+          ? 'KITCHEN HYGIENE INSPECTION'
+          : `STUDENT ATTENDANCE [Angle ${curAngleObj.id}/8: ${curAngleObj.label}]`;
+
+      const shiftLabel = inspectionShift || 'Lunch Serving';
+      const staffLabel = staffName ? `Staff: ${staffName}` : 'Mid-Day Meal Staff';
+
+      // 3. Burn Security Watermark Banner
+      const bannerHeight = Math.max(90, Math.round(height * 0.16));
+      const bannerY = height - bannerHeight;
+
+      const gradient = ctx.createLinearGradient(0, bannerY, 0, height);
+      gradient.addColorStop(0, 'rgba(15, 23, 42, 0.88)');
+      gradient.addColorStop(1, 'rgba(2, 6, 23, 0.96)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, bannerY, width, bannerHeight);
+
+      ctx.fillStyle = '#0d9488';
+      ctx.fillRect(0, bannerY, width, 4);
+
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+
+      const baseFontSize = Math.max(12, Math.round(height * 0.024));
+      ctx.font = `bold ${baseFontSize}px 'Inter', sans-serif`;
+
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillText(`LOCATION: ${locString}  |  ${nodeLabel}`, 20, bannerY + baseFontSize + 12);
+
+      ctx.fillStyle = '#facc15';
+      ctx.fillText(`CAPTURE TIME: ${timestampStr}`, 20, bannerY + (baseFontSize * 2) + 18);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `500 ${Math.max(11, baseFontSize - 2)}px 'Inter', sans-serif`;
+      ctx.fillText(`${categoryLabel}  •  ${shiftLabel}  •  ${staffLabel}`, 20, bannerY + (baseFontSize * 3) + 24);
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#2dd4bf';
+      ctx.font = `bold ${Math.max(11, baseFontSize - 2)}px 'Inter', sans-serif`;
+      ctx.fillText('GOVT OF ANDHRA PRADESH', width - 20, bannerY + baseFontSize + 12);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = `400 ${Math.max(10, baseFontSize - 4)}px 'Inter', sans-serif`;
+      ctx.fillText(
+        category === 'STUDENT_EATING'
+          ? `YOLOv8 Student Headcount • Angle ${curAngleObj.id} of 8`
+          : `AP MDM 2025 Verified • Zone ${selectedZone}`,
+        width - 20,
+        bannerY + (baseFontSize * 2) + 18
+      );
+
+      ctx.textAlign = 'left';
+      ctx.shadowColor = 'transparent';
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { resolve(null); return; }
+          const url = URL.createObjectURL(blob);
+          const meta = {
+            timestamp: isoTimestamp,
+            latitude: locationData.latitude,
+            longitude: locationData.longitude,
+            location_text: locString
+          };
+          resolve({ blob, url, meta });
+        },
+        'image/jpeg',
+        0.92
+      );
+    });
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // Photo Capture from Live Video
+  // ─────────────────────────────────────────────────────────────
+  const captureFromVideo = async () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
     const width = video.videoWidth || 1280;
     const height = video.videoHeight || 720;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
+    const result = await stampImageAndCreateBlob(video, width, height);
+    if (!result) return;
 
-    // 1. Draw raw camera frame
-    ctx.drawImage(video, 0, 0, width, height);
-
-    // 2. Prepare timestamp and location strings
-    const now = new Date();
-    const timestampStr = now.toLocaleString('en-IN', {
-      dateStyle: 'full',
-      timeStyle: 'medium',
-      hour12: true
-    });
-    const isoTimestamp = now.toISOString();
-
-    const locString = locationData.text || 'Location: ZPHS Penamaluru Node';
-    const nodeLabel = schoolName || 'ZPHS Penamaluru';
-    
-    const curAngleObj = EIGHT_ANGLES.find((a) => a.id === selectedAngle) || EIGHT_ANGLES[0];
-    const categoryLabel =
-      category === 'MEAL_PREPARATION'
-        ? `MEAL PREPARATION • ZONE ${selectedZone} (${selectedDay.toUpperCase()})`
-        : category === 'KITCHEN_HYGIENE'
-        ? 'KITCHEN HYGIENE INSPECTION'
-        : `STUDENT ATTENDANCE [Angle ${curAngleObj.id}/8: ${curAngleObj.label}]`;
-
-    const shiftLabel = inspectionShift || 'Inspection Shift';
-    const staffLabel = staffName ? `Staff: ${staffName}` : 'Mid-Day Meal Staff';
-
-    // 3. Burn Security Watermark Banner
-    const bannerHeight = Math.max(90, Math.round(height * 0.16));
-    const bannerY = height - bannerHeight;
-
-    const gradient = ctx.createLinearGradient(0, bannerY, 0, height);
-    gradient.addColorStop(0, 'rgba(15, 23, 42, 0.88)');
-    gradient.addColorStop(1, 'rgba(2, 6, 23, 0.96)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, bannerY, width, bannerHeight);
-
-    ctx.fillStyle = '#0d9488';
-    ctx.fillRect(0, bannerY, width, 4);
-
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetX = 1;
-    ctx.shadowOffsetY = 1;
-
-    const baseFontSize = Math.max(12, Math.round(height * 0.024));
-    ctx.font = `bold ${baseFontSize}px 'Inter', sans-serif`;
-
-    ctx.fillStyle = '#38bdf8';
-    ctx.fillText(`LOCATION: ${locString}  |  ${nodeLabel}`, 20, bannerY + baseFontSize + 12);
-
-    ctx.fillStyle = '#facc15';
-    ctx.fillText(`CAPTURE TIME: ${timestampStr}`, 20, bannerY + (baseFontSize * 2) + 18);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `500 ${Math.max(11, baseFontSize - 2)}px 'Inter', sans-serif`;
-    ctx.fillText(`${categoryLabel}  •  ${shiftLabel}  •  ${staffLabel}`, 20, bannerY + (baseFontSize * 3) + 24);
-
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#2dd4bf';
-    ctx.font = `bold ${Math.max(11, baseFontSize - 2)}px 'Inter', sans-serif`;
-    ctx.fillText('GOVT OF ANDHRA PRADESH', width - 20, bannerY + baseFontSize + 12);
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = `400 ${Math.max(10, baseFontSize - 4)}px 'Inter', sans-serif`;
-    ctx.fillText(
-      category === 'STUDENT_EATING'
-        ? `YOLOv8 Student Headcount • Angle ${curAngleObj.id} of 8`
-        : `AP MDM 2025 Verified • Zone ${selectedZone}`,
-      width - 20,
-      bannerY + (baseFontSize * 2) + 18
-    );
-
-    ctx.textAlign = 'left';
-    ctx.shadowColor = 'transparent';
-
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) return;
-
-        const url = URL.createObjectURL(blob);
-        const meta = {
-          timestamp: isoTimestamp,
-          latitude: locationData.latitude,
-          longitude: locationData.longitude,
-          location_text: locString
+    if (category === 'STUDENT_EATING') {
+      const curAngleObj = EIGHT_ANGLES.find((a) => a.id === selectedAngle) || EIGHT_ANGLES[0];
+      setCapturedAnglePhotos((prev) => {
+        const updated = [...prev];
+        if (updated[selectedAngle - 1]?.previewUrl) {
+          URL.revokeObjectURL(updated[selectedAngle - 1].previewUrl);
+        }
+        updated[selectedAngle - 1] = {
+          blob: result.blob,
+          previewUrl: result.url,
+          meta: result.meta,
+          angleId: curAngleObj.id,
+          angleLabel: curAngleObj.label
         };
+        return updated;
+      });
 
-        if (category === 'STUDENT_EATING') {
-          // Save into the specific angle slot
+      // Auto-advance angle
+      setCapturedAnglePhotos((currentArr) => {
+        const nextEmptyIndex = currentArr.findIndex((slot, i) => i !== (selectedAngle - 1) && !slot);
+        if (nextEmptyIndex !== -1) {
+          setSelectedAngle(nextEmptyIndex + 1);
+        } else if (selectedAngle < 8) {
+          setSelectedAngle(selectedAngle + 1);
+        }
+        return currentArr;
+      });
+    } else {
+      setSingleCapturedBlob(result.blob);
+      setSinglePreviewUrl(result.url);
+      setSingleMeta(result.meta);
+      stopCamera();
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // Photo Upload from Local File (Single Mode)
+  // ─────────────────────────────────────────────────────────────
+  const handleSingleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = async () => {
+        const width = img.naturalWidth || 1280;
+        const height = img.naturalHeight || 720;
+        const result = await stampImageAndCreateBlob(img, width, height);
+        if (result) {
+          setSingleCapturedBlob(result.blob);
+          setSinglePreviewUrl(result.url);
+          setSingleMeta(result.meta);
+        }
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+    // Reset file input so re-selecting same file fires onChange
+    e.target.value = '';
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // Photo Upload for Specific Angle Slot
+  // ─────────────────────────────────────────────────────────────
+  const handleSlotFileUpload = (e, angleIdx) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const angleObj = EIGHT_ANGLES[angleIdx];
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = async () => {
+        const width = img.naturalWidth || 1280;
+        const height = img.naturalHeight || 720;
+        const result = await stampImageAndCreateBlob(img, width, height, angleObj);
+        if (result) {
           setCapturedAnglePhotos((prev) => {
             const updated = [...prev];
-            if (updated[selectedAngle - 1]?.previewUrl) {
-              URL.revokeObjectURL(updated[selectedAngle - 1].previewUrl);
+            if (updated[angleIdx]?.previewUrl) {
+              URL.revokeObjectURL(updated[angleIdx].previewUrl);
             }
-            updated[selectedAngle - 1] = {
-              blob,
-              previewUrl: url,
-              meta,
-              angleId: curAngleObj.id,
-              angleLabel: curAngleObj.label
+            updated[angleIdx] = {
+              blob: result.blob,
+              previewUrl: result.url,
+              meta: result.meta,
+              angleId: angleObj.id,
+              angleLabel: angleObj.label
             };
             return updated;
           });
-
-          // Auto-advance to next uncaptured angle if available
-          setCapturedAnglePhotos((currentArr) => {
-            const nextEmptyIndex = currentArr.findIndex((slot, i) => i !== (selectedAngle - 1) && !slot);
-            if (nextEmptyIndex !== -1) {
-              setSelectedAngle(nextEmptyIndex + 1);
-            } else if (selectedAngle < 8) {
-              setSelectedAngle(selectedAngle + 1);
-            }
-            return currentArr;
-          });
-
-        } else {
-          // Single photo for Meal Prep or Kitchen Hygiene
-          setSingleCapturedBlob(blob);
-          setSinglePreviewUrl(url);
-          setSingleMeta(meta);
-          stopCamera();
+          // Auto select next empty angle
+          if (angleIdx + 1 < 8) setSelectedAngle(angleIdx + 2);
         }
-      },
-      'image/jpeg',
-      0.92
-    );
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // Batch Upload All 8 Angles from Multiple Files
+  // ─────────────────────────────────────────────────────────────
+  const handleBatchFilesUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    files.forEach((file, idx) => {
+      if (idx >= 8) return;
+      const angleObj = EIGHT_ANGLES[idx];
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = async () => {
+          const width = img.naturalWidth || 1280;
+          const height = img.naturalHeight || 720;
+          const result = await stampImageAndCreateBlob(img, width, height, angleObj);
+          if (result) {
+            setCapturedAnglePhotos((prev) => {
+              const updated = [...prev];
+              if (updated[idx]?.previewUrl) {
+                URL.revokeObjectURL(updated[idx].previewUrl);
+              }
+              updated[idx] = {
+                blob: result.blob,
+                previewUrl: result.url,
+                meta: result.meta,
+                angleId: angleObj.id,
+                angleLabel: angleObj.label
+              };
+              return updated;
+            });
+          }
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
   };
 
   // Retake photo for single mode
@@ -330,7 +439,9 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
     setSinglePreviewUrl(null);
     setSingleCapturedBlob(null);
     setSingleMeta(null);
-    startCamera(facingMode);
+    if (captureMethod === 'camera') {
+      startCamera(facingMode);
+    }
   };
 
   // Clear specific angle in multi-angle mode
@@ -372,12 +483,12 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
 
     if (category === 'STUDENT_EATING') {
       if (!isEightAnglesReady) {
-        setErrorMsg(`All 8 angle images must be captured before submission. Currently captured: ${capturedAnglesCount} / 8.`);
+        setErrorMsg(`All 8 angle images must be uploaded/captured before submission. Currently uploaded: ${capturedAnglesCount} / 8.`);
         return;
       }
     } else {
       if (!singleCapturedBlob) {
-        setErrorMsg('Please capture a photo using the live camera before submitting.');
+        setErrorMsg('Please select or capture an image before submitting.');
         return;
       }
     }
@@ -398,7 +509,6 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
       const lon = singleMeta?.longitude ?? locationData.longitude;
 
       if (category === 'STUDENT_EATING') {
-        // Upload all 8 images via batch endpoint
         const formData = new FormData();
         capturedAnglePhotos.forEach((item, index) => {
           if (item?.blob) {
@@ -417,10 +527,9 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
         formData.append('location_text', locText);
 
         await schoolService.uploadStudentBatch(formData);
-        setSuccessMsg('All 8 angle images uploaded successfully! YOLOv8 student headcount in progress.');
+        setSuccessMsg('All 8 angle photos submitted & verified! YOLOv8 student headcount updated.');
 
       } else {
-        // Single image upload for Meal Prep or Kitchen Hygiene
         const formData = new FormData();
         formData.append('file', singleCapturedBlob, `meal_${Date.now()}.jpg`);
         formData.append('category', category);
@@ -458,10 +567,10 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
 
       setTimeout(() => {
         handleCloseModal();
-      }, 1600);
+      }, 1200);
     } catch (err) {
       console.error("Submission error:", err);
-      setErrorMsg(err.response?.data?.detail || 'Failed to submit in-app capture. Please try again.');
+      setErrorMsg(err.response?.data?.detail || 'Failed to submit inspection capture. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -472,27 +581,27 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
   const currentAngleObj = EIGHT_ANGLES.find((a) => a.id === selectedAngle) || EIGHT_ANGLES[0];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs overflow-y-auto">
-      <div className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden my-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs overflow-y-auto">
+      <div className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden my-6">
         
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
           <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-700">
-              <Camera className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-lg bg-teal-600 flex items-center justify-center text-white shadow-xs">
+              <Camera className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-sm sm:text-base text-slate-900">
-                Staff Inspection & Headcount Capture
-              </h3>
-              <p className="text-[11px] text-teal-700 font-medium">
-                Live in-app capture only • GPS & Timestamp stamped • Automated Statutory Verification
+              <h2 className="text-base font-bold text-slate-900">
+                School Field Node • Photo Inspection & Attendance
+              </h2>
+              <p className="text-xs text-slate-500">
+                Statutory Mid-Day Meal Menu & 8-Angle Student Attendance Headcount
               </p>
             </div>
           </div>
           <button
             onClick={handleCloseModal}
-            className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 transition-colors"
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -524,7 +633,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
               <button
                 type="button"
                 onClick={() => setCategory('MEAL_PREPARATION')}
-                className={`py-2 px-2.5 rounded-lg text-xs font-semibold border text-center transition-all ${
+                className={`py-2 px-2.5 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer ${
                   category === 'MEAL_PREPARATION'
                     ? 'bg-teal-50 border-teal-500 text-teal-800 shadow-xs'
                     : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
@@ -535,7 +644,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
               <button
                 type="button"
                 onClick={() => setCategory('KITCHEN_HYGIENE')}
-                className={`py-2 px-2.5 rounded-lg text-xs font-semibold border text-center transition-all ${
+                className={`py-2 px-2.5 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer ${
                   category === 'KITCHEN_HYGIENE'
                     ? 'bg-teal-50 border-teal-500 text-teal-800 shadow-xs'
                     : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
@@ -546,7 +655,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
               <button
                 type="button"
                 onClick={() => setCategory('STUDENT_EATING')}
-                className={`py-2 px-2.5 rounded-lg text-xs font-semibold border text-center transition-all ${
+                className={`py-2 px-2.5 rounded-lg text-xs font-semibold border text-center transition-all cursor-pointer ${
                   category === 'STUDENT_EATING'
                     ? 'bg-teal-50 border-teal-500 text-teal-800 shadow-xs'
                     : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
@@ -556,9 +665,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
               </button>
             </div>
 
-            {/* ───────────────────────────────────────────────────────────── */}
-            {/* OPTION 1: MEAL PREPARATION - Zone Selector & 2025 Menu Card */}
-            {/* ───────────────────────────────────────────────────────────── */}
+            {/* MEAL PREPARATION - Zone Selector & 2025 Menu Card */}
             {category === 'MEAL_PREPARATION' && (
               <div className="mt-2.5 p-3 rounded-lg bg-teal-50/70 border border-teal-200 space-y-2.5">
                 <div className="flex items-center justify-between flex-wrap gap-2">
@@ -640,9 +747,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
               </div>
             )}
 
-            {/* ───────────────────────────────────────────────────────────── */}
-            {/* OPTION 2: STUDENT COUNT - 8 Angle Requirement & Slots Gallery */}
-            {/* ───────────────────────────────────────────────────────────── */}
+            {/* STUDENT COUNT - 8 Angle Requirement & Slots Gallery */}
             {category === 'STUDENT_EATING' && (
               <div className="mt-2.5 p-3 rounded-lg bg-teal-50 border border-teal-200 space-y-2.5">
                 <div className="flex items-center justify-between">
@@ -650,17 +755,38 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                     <Users className="w-4 h-4 text-teal-700 shrink-0" />
                     <span>Upload min 8 images from 8 different angles</span>
                   </div>
-                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                    isEightAnglesReady
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-amber-500 text-white'
-                  }`}>
-                    {capturedAnglesCount} of 8 Captured
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    {/* Batch Select 8 Photos from Device */}
+                    <button
+                      type="button"
+                      onClick={() => batchFileInputRef.current?.click()}
+                      className="px-2.5 py-1 rounded bg-teal-700 hover:bg-teal-800 text-white text-[10px] font-bold flex items-center space-x-1 shadow-2xs cursor-pointer transition-colors"
+                      title="Select multiple images from device to fill the 8 angles"
+                    >
+                      <FolderPlus className="w-3.5 h-3.5" />
+                      <span>Select 8 Photos from Device</span>
+                    </button>
+                    <input
+                      ref={batchFileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleBatchFilesUpload}
+                    />
+
+                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                      isEightAnglesReady
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-amber-500 text-white'
+                    }`}>
+                      {capturedAnglesCount} of 8 Uploaded
+                    </span>
+                  </div>
                 </div>
                 
                 <p className="text-[11px] text-teal-800 leading-snug">
-                  To eliminate blind spots, photograph the dining hall from all 8 designated angles. Select an angle or take photos in order:
+                  Photograph or select dining hall photos from all 8 designated angles. Click any card below to pick a photo for that angle, or use the batch button above:
                 </p>
 
                 {/* 8 Angle Selector Pills */}
@@ -696,20 +822,22 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
 
                 {/* 8 Angle Captured Thumbnails Preview Strip */}
                 <div className="pt-1">
-                  <span className="text-[10px] font-bold text-teal-900 block mb-1">
-                    8-Angle Capture Gallery ({capturedAnglesCount}/8):
-                  </span>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-bold text-teal-900">
+                      8-Angle Gallery ({capturedAnglesCount}/8 ready):
+                    </span>
+                  </div>
                   <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
                     {EIGHT_ANGLES.map((ang, idx) => {
                       const photoObj = capturedAnglePhotos[idx];
                       return (
                         <div
                           key={ang.id}
-                          className={`relative rounded-md border h-16 flex flex-col items-center justify-center overflow-hidden transition-all ${
+                          className={`relative rounded-md border h-18 flex flex-col items-center justify-center overflow-hidden transition-all ${
                             photoObj
-                              ? 'border-emerald-400 bg-black'
+                              ? 'border-emerald-500 bg-black shadow-xs'
                               : selectedAngle === ang.id
-                              ? 'border-dashed border-teal-500 bg-white ring-1 ring-teal-400'
+                              ? 'border-dashed border-teal-500 bg-white ring-2 ring-teal-400'
                               : 'border-dashed border-slate-300 bg-slate-50'
                           }`}
                         >
@@ -720,26 +848,31 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                                 alt={`Angle ${ang.id}`}
                                 className="w-full h-full object-cover"
                               />
-                              <button
-                                type="button"
-                                onClick={() => handleRetakeAngle(idx)}
-                                className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[8px] py-0.5 text-center hover:bg-rose-700 transition-colors"
-                                title="Retake this angle"
-                              >
-                                Retake
-                              </button>
+                              <div className="absolute inset-x-0 bottom-0 bg-slate-950/80 p-0.5 flex items-center justify-between text-[8px] text-white">
+                                <span className="font-bold pl-0.5">#{ang.id}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRetakeAngle(idx)}
+                                  className="text-rose-300 hover:text-white px-1 font-bold"
+                                  title="Remove/replace this angle"
+                                >
+                                  ✕
+                                </button>
+                              </div>
                             </>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedAngle(ang.id)}
-                              className="w-full h-full flex flex-col items-center justify-center p-1 text-center"
-                            >
+                            <label className="w-full h-full flex flex-col items-center justify-center p-1 text-center cursor-pointer hover:bg-teal-50">
                               <Camera className="w-3.5 h-3.5 text-slate-400 mb-0.5" />
-                              <span className="text-[8px] text-slate-500 font-bold truncate max-w-full">
-                                #{ang.id}
+                              <span className="text-[8px] text-slate-600 font-bold truncate max-w-full">
+                                #{ang.id} {ang.label.split(' ')[0]}
                               </span>
-                            </button>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => handleSlotFileUpload(e, idx)}
+                              />
+                            </label>
                           )}
                         </div>
                       );
@@ -747,8 +880,8 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                   </div>
                 </div>
 
-                <div className="text-[10px] text-teal-900 bg-white/80 border border-teal-200 rounded px-2.5 py-1.5 flex items-center justify-between">
-                  <span><strong>Active Camera Target:</strong> Angle {currentAngleObj.id} ({currentAngleObj.label}) — {currentAngleObj.desc}</span>
+                <div className="text-[10px] text-teal-900 bg-white/90 border border-teal-200 rounded px-2.5 py-1.5 flex items-center justify-between">
+                  <span><strong>Current Target:</strong> Angle {currentAngleObj.id} ({currentAngleObj.label}) — {currentAngleObj.desc}</span>
                   <span className="text-teal-700 font-mono font-bold">Angle {currentAngleObj.id}/8</span>
                 </div>
               </div>
@@ -761,17 +894,37 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
             )}
           </div>
 
-          {/* Live Camera Viewfinder / Preview */}
+          {/* ───────────────────────────────────────────────────────────── */}
+          {/* Method Switcher: File Upload vs Live Camera */}
+          {/* ───────────────────────────────────────────────────────────── */}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <label className="font-semibold text-slate-700 flex items-center space-x-1.5">
-                <Camera className="w-3.5 h-3.5 text-teal-600" />
-                <span>
-                  {category === 'STUDENT_EATING'
-                    ? `Live Camera — Capturing [Angle ${currentAngleObj.id}/8: ${currentAngleObj.label}]`
-                    : 'Camera Viewfinder (Direct In-App Capture)'}
-                </span>
-              </label>
+              <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => { setCaptureMethod('file'); stopCamera(); }}
+                  className={`px-3 py-1 rounded-md font-semibold text-xs transition-colors flex items-center space-x-1.5 cursor-pointer ${
+                    captureMethod === 'file'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <UploadCloud className="w-3.5 h-3.5" />
+                  <span>Upload from Device</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setCaptureMethod('camera'); startCamera(facingMode); }}
+                  className={`px-3 py-1 rounded-md font-semibold text-xs transition-colors flex items-center space-x-1.5 cursor-pointer ${
+                    captureMethod === 'camera'
+                      ? 'bg-teal-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>Live Camera Capture</span>
+                </button>
+              </div>
 
               {/* GPS indicator pill */}
               <div className="flex items-center space-x-1 text-[11px] text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200">
@@ -780,8 +933,8 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
               </div>
             </div>
 
-            {/* Viewfinder Window */}
-            <div className="relative w-full h-72 sm:h-84 bg-slate-950 rounded-xl border border-slate-300 overflow-hidden flex flex-col items-center justify-center">
+            {/* Viewfinder / File Upload Box */}
+            <div className="relative w-full h-72 sm:h-80 bg-slate-950 rounded-xl border border-slate-300 overflow-hidden flex flex-col items-center justify-center">
               
               {/* Single photo preview (for Meal Prep / Hygiene) */}
               {category !== 'STUDENT_EATING' && singlePreviewUrl ? (
@@ -798,14 +951,72 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                   <button
                     type="button"
                     onClick={handleSingleRetake}
-                    className="absolute top-3 right-3 px-3 py-1.5 rounded-md bg-white/90 hover:bg-white text-slate-800 text-xs font-semibold border border-slate-200 shadow-xs flex items-center space-x-1 transition-all"
+                    className="absolute top-3 right-3 px-3 py-1.5 rounded-md bg-white/95 hover:bg-white text-slate-800 text-xs font-semibold border border-slate-200 shadow-xs flex items-center space-x-1 transition-all cursor-pointer"
                   >
                     <RefreshCw className="w-3.5 h-3.5 text-teal-600" />
-                    <span>Retake Photo</span>
+                    <span>Change Photo</span>
                   </button>
                 </div>
+              ) : captureMethod === 'file' ? (
+                /* FILE UPLOAD DROPZONE */
+                <div className="w-full h-full bg-slate-900/90 flex flex-col items-center justify-center p-6 text-center space-y-3">
+                  <div className="w-14 h-14 rounded-full bg-teal-900/60 border border-teal-500/40 flex items-center justify-center text-teal-400">
+                    <UploadCloud className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white">
+                      {category === 'STUDENT_EATING'
+                        ? `Upload photo for [Angle ${currentAngleObj.id}: ${currentAngleObj.label}]`
+                        : `Select ${category === 'MEAL_PREPARATION' ? 'Meal' : 'Hygiene'} Photo from Device`}
+                    </p>
+                    <p className="text-xs text-slate-300 mt-1 max-w-md mx-auto">
+                      Supports JPG, PNG, WEBP. The official AP Govt geo-tag, timestamp, and menu verification watermark will be stamped automatically.
+                    </p>
+                  </div>
+
+                  {category === 'STUDENT_EATING' ? (
+                    <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                      <label className="px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer">
+                        <Camera className="w-4 h-4" />
+                        <span>Choose Photo for Angle #{currentAngleObj.id}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleSlotFileUpload(e, selectedAngle - 1)}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => batchFileInputRef.current?.click()}
+                        className="px-4 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-teal-500/30 text-teal-200 text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
+                      >
+                        <FolderPlus className="w-4 h-4" />
+                        <span>Select All 8 Photos at Once</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="pt-1">
+                      <label className="px-5 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer">
+                        <FileImage className="w-4 h-4" />
+                        <span>Browse / Select Inspection Photo</span>
+                        <input
+                          ref={singleFileInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleSingleFileUpload}
+                        />
+                      </label>
+                    </div>
+                  )}
+
+                  <div className="text-[10px] text-slate-400 font-mono">
+                    Node: {schoolName || 'ZPHS Penamaluru'} • GPS Auto-Burn Enabled
+                  </div>
+                </div>
               ) : cameraActive ? (
-                /* Live Camera Stream */
+                /* LIVE CAMERA VIEW */
                 <div className="relative w-full h-full bg-black">
                   <video
                     ref={videoRef}
@@ -823,7 +1034,6 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                         <span>LIVE CAMERA</span>
                       </div>
 
-                      {/* Flip camera button */}
                       <button
                         type="button"
                         onClick={toggleFacingMode}
@@ -855,21 +1065,20 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                       </p>
                       <p className="flex items-center text-amber-300">
                         <Clock className="w-3 h-3 mr-1 shrink-0" />
-                        <span>Auto-stamps date, time, location & official menu</span>
+                        <span>Auto-stamps date, time, location & menu</span>
                       </p>
                     </div>
 
-                    {/* Take Photo Button */}
                     <button
                       type="button"
-                      onClick={capturePhoto}
+                      onClick={captureFromVideo}
                       className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
                     >
                       <Camera className="w-4 h-4" />
                       <span>
                         {category === 'STUDENT_EATING'
-                          ? `Take Angle ${currentAngleObj.id} Photo`
-                          : 'Take Photo'}
+                          ? `Take Angle #${currentAngleObj.id} Photo`
+                          : 'Capture Photo'}
                       </span>
                     </button>
                   </div>
@@ -882,20 +1091,30 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-white">
-                      {cameraError || 'Camera Access Required'}
+                      {cameraError || 'Camera Access Not Active'}
                     </p>
                     <p className="text-xs text-slate-300 mt-1 max-w-sm mx-auto">
-                      Direct in-app capture only. External photo uploads are restricted for tamper-evident compliance.
+                      You can use direct device photo upload instead to submit images instantly.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => startCamera(facingMode)}
-                    className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold inline-flex items-center space-x-1.5 transition-colors"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Activate Camera</span>
-                  </button>
+                  <div className="flex items-center justify-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setCaptureMethod('file')}
+                      className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold inline-flex items-center space-x-1.5 transition-colors cursor-pointer"
+                    >
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      <span>Use Device Photo Upload</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => startCamera(facingMode)}
+                      className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold inline-flex items-center space-x-1.5 transition-colors cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Retry Camera</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -924,7 +1143,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
               <select
                 value={inspectionShift}
                 onChange={(e) => setInspectionShift(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-600 focus:border-teal-600"
+                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-600 focus:border-teal-600 cursor-pointer"
               >
                 <option value="Morning Prep">Morning Prep (8:00 AM - 11:00 AM)</option>
                 <option value="Lunch Serving">Lunch Serving (12:00 PM - 2:00 PM)</option>
@@ -939,7 +1158,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
             </label>
             <textarea
               rows={2}
-              placeholder="e.g. Cooking area sanitized, staff wearing aprons and hairnets, filtered water used."
+              placeholder="e.g. Cooking pots sanitized, staff wearing aprons and hairnets, filtered water used."
               value={hygieneNotes}
               onChange={(e) => setHygieneNotes(e.target.value)}
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-600 focus:border-teal-600 placeholder-slate-400 resize-none"
@@ -951,10 +1170,10 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
             <span className="text-[11px] text-slate-500">
               {category === 'STUDENT_EATING' ? (
                 isEightAnglesReady
-                  ? 'All 8 angle images captured and verified ✓'
-                  : `Capture ${capturedAnglesCount} / 8 angles to unlock submit`
+                  ? 'All 8 angle images ready ✓'
+                  : `Upload ${capturedAnglesCount} / 8 angles to unlock submit`
               ) : (
-                singleCapturedBlob ? 'Photo captured & stamped' : 'Camera capture required'
+                singleCapturedBlob ? 'Photo ready & stamped ✓' : 'Photo required'
               )}
             </span>
 
@@ -963,21 +1182,18 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                 type="button"
                 onClick={handleCloseModal}
                 disabled={isSubmitting}
-                className="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                className="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               
-              {/* ───────────────────────────────────────────────────────────── */}
-              {/* STRICT REQUIREMENT: Submit button ONLY appears when all 8     */}
-              {/* images are captured for Student Eating!                       */}
-              {/* ───────────────────────────────────────────────────────────── */}
+              {/* STRICT REQUIREMENT: Submit button ONLY appears when all 8 images are uploaded for Student Eating! */}
               {category === 'STUDENT_EATING' ? (
                 isEightAnglesReady ? (
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-5 py-2.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs disabled:opacity-40 transition-colors flex items-center space-x-1.5 cursor-pointer animate-bounce"
+                    className="px-5 py-2.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs disabled:opacity-40 transition-colors flex items-center space-x-1.5 cursor-pointer animate-pulse"
                   >
                     {isSubmitting ? (
                       <>
@@ -993,8 +1209,8 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                   </button>
                 ) : (
                   <div className="px-4 py-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-xs font-bold flex items-center space-x-1.5 shadow-2xs">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-                    <span>Submit locked ({capturedAnglesCount}/8 captured)</span>
+                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                    <span>Submit locked ({capturedAnglesCount}/8 ready)</span>
                   </div>
                 )
               ) : (
