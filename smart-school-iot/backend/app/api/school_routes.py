@@ -152,6 +152,35 @@ def get_school_meals(current_user: User = Depends(require_school), db: Session =
     images = db.query(ImageSubmission).filter(
         ImageSubmission.school_id == current_user.school_id
     ).order_by(ImageSubmission.created_at.desc()).all()
+
+    # Reconcile legacy false-positive passes against new CV engine
+    reconciled = False
+    for img in images:
+        if img.cv_status == "CV_PASS":
+            fn = os.path.basename(img.image_url) if img.image_url else ""
+            p = os.path.join(UPLOAD_DIR, fn)
+            if os.path.exists(p):
+                if img.category in ("MEAL_PREPARATION", "KITCHEN_HYGIENE"):
+                    res = food_quality_check(p, zone=2, day_of_week="Monday", menu_description=img.menu_description or "")
+                    if res["cv_status"] == "CV_FLAG":
+                        img.cv_status = "CV_FLAG"
+                        img.status = "CV_FLAG"
+                        img.cv_notes = res["cv_notes"]
+                        img.cv_match_percentage = 0.0
+                        reconciled = True
+                elif img.category == "STUDENT_EATING":
+                    res = count_students_in_image(p)
+                    if res.get("cv_status") == "CV_FLAG" or res.get("cv_student_count", 0) == 0:
+                        img.cv_status = "CV_FLAG"
+                        img.status = "CV_FLAG"
+                        img.cv_student_count = 0
+                        img.cv_notes = res.get("cv_notes")
+                        reconciled = True
+    if reconciled:
+        try:
+            db.commit()
+        except Exception:
+            pass
     
     # Also fetch humidity sensor reading if available and hardware is online
     latest_sensor = None
@@ -333,13 +362,13 @@ def upload_school_image(
     menu_text = clean_menu_desc or clean_meal_type or ""
 
     # ── Background CV Analysis ─────────────────────────────────────────
-    def run_cv_analysis(media_path: str, sub_id: int, cat: str, menu: str, angle_num: Optional[int], zone_num: Optional[int], day_str: Optional[str]):
+    def run_cv_analysis(media_path: str, sub_id: int, cat: str, menu: str, angle_num: Optional[int], zone_num: Optional[int], day_str: Optional[str], session: Optional[Session] = None):
         """
-        Runs in a daemon thread so the API returns immediately while CV processes.
-        Opens a new DB session (thread-safe) to write back results.
+        Runs synchronously when session is provided (Serverless), or in a daemon thread.
+        Uses provided session or opens a new DB session (thread-safe) to write back results.
         """
         from ..database.connection import SessionLocal as _SL
-        _db = _SL()
+        _db = session if session is not None else _SL()
         try:
             sub = _db.query(ImageSubmission).filter(ImageSubmission.id == sub_id).first()
             if not sub:
@@ -394,7 +423,8 @@ def upload_school_image(
             except Exception:
                 pass
         finally:
-            _db.close()
+            if session is None:
+                _db.close()
 
     # Launch CV analysis
     abs_file_path = os.path.abspath(file_path)
@@ -403,7 +433,7 @@ def upload_school_image(
         if is_serverless:
             # Serverless containers freeze background threads upon HTTP response.
             # Execute synchronously so CV results are persisted immediately.
-            run_cv_analysis(abs_file_path, submission_id, category, menu_text, clean_angle_num, clean_zone, clean_day)
+            run_cv_analysis(abs_file_path, submission_id, category, menu_text, clean_angle_num, clean_zone, clean_day, session=db)
             db.refresh(submission)
         else:
             t = threading.Thread(
@@ -485,9 +515,9 @@ def upload_student_batch(
     to_process = []
     is_serverless = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
 
-    def _run_single_cv(media_path: str, sub_id: int, angle_num: int):
+    def _run_single_cv(media_path: str, sub_id: int, angle_num: int, session: Optional[Session] = None):
         from ..database.connection import SessionLocal as _SL
-        _db = _SL()
+        _db = session if session is not None else _SL()
         try:
             sub = _db.query(ImageSubmission).filter(ImageSubmission.id == sub_id).first()
             if not sub:
@@ -520,7 +550,8 @@ def upload_student_batch(
             except Exception:
                 pass
         finally:
-            _db.close()
+            if session is None:
+                _db.close()
 
     for idx, f in enumerate(files):
         angle_num = idx + 1
@@ -571,7 +602,7 @@ def upload_student_batch(
         if is_serverless:
             # Serverless containers freeze background threads upon HTTP response.
             # Execute synchronously so student headcounts are persisted immediately.
-            _run_single_cv(abs_p, sub.id, angle_num)
+            _run_single_cv(abs_p, sub.id, angle_num, session=db)
             db.refresh(sub)
         else:
             t = threading.Thread(target=_run_single_cv, args=(abs_p, sub.id, angle_num), daemon=True)

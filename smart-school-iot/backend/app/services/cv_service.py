@@ -403,6 +403,133 @@ def calculate_zone_menu_match(zone_id: Optional[int], day_name: Optional[str], d
     }
 
 
+def _analyze_skin_and_hands(img_or_path, img_path: Optional[str] = None) -> Dict:
+    """
+    Computes precise skin coverage and detects human hand/limb close-ups across YCrCb and RGB spaces.
+    Excludes neutral tableware, stainless steel plates, white rice, and yellow/green curries.
+    Returns:
+        skin_pct (float): 0.0 to 100.0
+        is_hand_closeup (bool): True if photo is dominated by a human hand, palm, or arm
+        skin_mask (ndarray or None): binary mask of skin pixels
+        max_blob_ratio (float): fraction of image covered by the largest continuous skin component
+    """
+    skin_pct = 0.0
+    is_hand_closeup = False
+    skin_mask = None
+    max_blob_ratio = 0.0
+
+    # 1. Resolve BGR/RGB image
+    im = None
+    h, w = 0, 0
+    if HAS_OPENCV and cv2 is not None and img_or_path is not None and hasattr(img_or_path, "shape"):
+        im = img_or_path
+        h, w = im.shape[:2]
+    elif HAS_OPENCV and cv2 is not None and img_path and os.path.exists(img_path):
+        im = cv2.imread(img_path)
+        if im is not None:
+            h, w = im.shape[:2]
+
+    if im is not None and np is not None:
+        tot = max(h * w, 1)
+        ycrcb = cv2.cvtColor(im, cv2.COLOR_BGR2YCrCb)
+        cr = ycrcb[:, :, 1].astype(int)
+        cb = ycrcb[:, :, 2].astype(int)
+        b, g, r = cv2.split(im)
+        r_i, g_i, b_i = r.astype(int), g.astype(int), b.astype(int)
+
+        # Standard YCrCb skin chrominance
+        s_std = (cr >= 133) & (cr <= 173) & (cb >= 77) & (cb <= 128) & (cr > cb)
+        # Warm RGB flesh tone
+        s_rgb = (r_i > 95) & (g_i > 40) & (b_i > 20) & (r_i > g_i + 3) & (r_i > b_i + 10) & (cr >= 130) & (cr > cb)
+        # Pale palm flesh tone (indoor camera white balance)
+        s_palm = (r_i >= 130) & (g_i >= 115) & (b_i >= 95) & (r_i >= g_i) & (r_i >= b_i + 4) & (cr >= 129) & (cr > cb)
+
+        skin_mask = (s_std | s_rgb | s_palm).astype(np.uint8)
+        skin_px = int(np.sum(skin_mask))
+        skin_pct = (skin_px / tot) * 100.0
+
+        # Fast connected components on small thumbnail to measure largest continuous blob
+        thumb_h, thumb_w = 160, 240
+        thumb_mask = cv2.resize(skin_mask, (thumb_w, thumb_h), interpolation=cv2.INTER_NEAREST)
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(thumb_mask)
+        if num_labels > 1:
+            areas = stats[1:, cv2.CC_STAT_AREA]
+            max_area = int(np.max(areas)) if len(areas) > 0 else 0
+            max_blob_ratio = max_area / (thumb_h * thumb_w)
+
+        is_hand_closeup = (skin_pct >= 18.0) or (max_blob_ratio >= 0.12)
+        return {
+            "skin_pct": round(skin_pct, 1),
+            "is_hand_closeup": is_hand_closeup,
+            "skin_mask": skin_mask,
+            "max_blob_ratio": round(max_blob_ratio, 3)
+        }
+
+    # Pillow fallback (Cloud Serverless / Pure Python)
+    if HAS_PIL and Image is not None and (img_path or hasattr(img_or_path, "convert")):
+        try:
+            pil_im = img_or_path if hasattr(img_or_path, "convert") else Image.open(img_path or "")
+            if pil_im.mode != "RGB":
+                pil_im = pil_im.convert("RGB")
+            thumb = pil_im.resize((240, 160))
+            tot = 240 * 160
+
+            if np is not None:
+                arr = np.array(thumb)
+                r = arr[:, :, 0].astype(int)
+                g = arr[:, :, 1].astype(int)
+                b = arr[:, :, 2].astype(int)
+
+                cr = 128.0 + 0.500 * r - 0.418688 * g - 0.081312 * b
+                cb = 128.0 - 0.168736 * r - 0.331264 * g + 0.500 * b
+
+                s_std = (cr >= 133) & (cr <= 173) & (cb >= 77) & (cb <= 128) & (cr > cb)
+                s_rgb = (r > 95) & (g > 40) & (b > 20) & (r > g + 3) & (r > b + 10) & (cr >= 130) & (cr > cb)
+                s_palm = (r >= 130) & (g >= 115) & (b >= 95) & (r >= g) & (r >= b + 4) & (cr >= 129) & (cr > cb)
+                skin = s_std | s_rgb | s_palm
+                skin_pct = (np.count_nonzero(skin) / tot) * 100.0
+
+                # Check grid density: hand creates clusters of fully-packed cells
+                grid_h, grid_w = 160 // 16, 240 // 16
+                dense_cells = 0
+                max_cell_cnt = 0
+                for gy in range(grid_h):
+                    for gx in range(grid_w):
+                        cell = skin[gy*16:(gy+1)*16, gx*16:(gx+1)*16]
+                        cnt = np.count_nonzero(cell)
+                        if cnt > max_cell_cnt:
+                            max_cell_cnt = cnt
+                        if cnt >= 180: # >= 70% of 16x16 cell is skin
+                            dense_cells += 1
+
+                max_blob_ratio = max_cell_cnt / 256.0
+                is_hand_closeup = (skin_pct >= 18.0) or (dense_cells >= 4) or (max_cell_cnt >= 230)
+                skin_mask = skin
+            else:
+                pix = list(thumb.getdata())
+                skin_cnt = 0
+                for r_val, g_val, b_val in pix:
+                    cr = 128.0 + 0.500 * r_val - 0.418688 * g_val - 0.081312 * b_val
+                    cb = 128.0 - 0.168736 * r_val - 0.331264 * g_val + 0.500 * b_val
+                    is_s = (133 <= cr <= 173 and 77 <= cb <= 128 and cr > cb) or \
+                           (r_val > 95 and g_val > 40 and b_val > 20 and r_val > g_val + 3 and r_val > b_val + 10 and cr >= 130 and cr > cb) or \
+                           (r_val >= 130 and g_val >= 115 and b_val >= 95 and r_val >= g_val and r_val >= b_val + 4 and cr >= 129 and cr > cb)
+                    if is_s:
+                        skin_cnt += 1
+                skin_pct = (skin_cnt / tot) * 100.0
+                is_hand_closeup = skin_pct >= 18.0
+
+        except Exception as e:
+            logger.warning(f"Pillow skin analysis warning: {e}")
+
+    return {
+        "skin_pct": round(skin_pct, 1),
+        "is_hand_closeup": is_hand_closeup,
+        "skin_mask": skin_mask,
+        "max_blob_ratio": round(max_blob_ratio, 3)
+    }
+
+
 def _detect_indian_food_items_pillow(img_path: str) -> Tuple[List[str], List[str], Dict]:
     """
     Pure-Python / Pillow fallback detector for Cloud Serverless environments (Vercel / AWS Lambda).
@@ -422,19 +549,25 @@ def _detect_indian_food_items_pillow(img_path: str) -> Tuple[List[str], List[str
         return detected_dishes, yolo_food_vessels, metrics
 
     try:
+        # 1. Skin & Hand Rejection
+        skin_res = _analyze_skin_and_hands(None, img_path)
+        if skin_res["is_hand_closeup"] or skin_res["skin_pct"] >= 18.0:
+            return detected_dishes, yolo_food_vessels, metrics
+
         pil_img = Image.open(img_path)
         if pil_img.mode != "RGB":
             pil_img = pil_img.convert("RGB")
 
-        # Fast 300x300 thumbnail for instant pure-Python spectral analysis
+        # 300x300 thumbnail for spectral analysis
         thumb = pil_img.resize((300, 300))
+        tot = 300 * 300
         hsv = thumb.convert("HSV")
         h_chan, s_chan, v_chan = hsv.split()
 
         h_bytes = h_chan.tobytes()
         s_bytes = s_chan.tobytes()
         v_bytes = v_chan.tobytes()
-        tot = 300 * 300
+        rgb_data = list(thumb.getdata())
 
         wr_cnt = 0
         sr_cnt = 0
@@ -448,39 +581,52 @@ def _detect_indian_food_items_pillow(img_path: str) -> Tuple[List[str], List[str
         plate_cnt = 0
 
         for i in range(tot):
+            r_val, g_val, b_val = rgb_data[i]
             h = (h_bytes[i] * 360) // 255
             s = s_bytes[i]
             v = v_bytes[i]
 
-            # 1. White rice: low saturation, high value
-            if s <= 45 and v >= 140:
-                wr_cnt += 1
-            # 2. Spiced rice: turmeric gold
-            elif 14 <= h <= 38 and 45 <= s <= 170 and v >= 110:
-                sr_cnt += 1
-            # 3. Dal: yellow-amber lentils
-            elif 7 <= h <= 36 and s >= 50 and v >= 45:
-                dal_cnt += 1
-            # 4. Greens: leafy vegetables
-            elif 32 <= h <= 90 and s >= 30 and v >= 25:
+            # Skin exclusion (human skin always has 77 <= Cb <= 128; yellow curries have Cb < 70)
+            cr = 128.0 + 0.500 * r_val - 0.418688 * g_val - 0.081312 * b_val
+            cb = 128.0 - 0.168736 * r_val - 0.331264 * g_val + 0.500 * b_val
+            is_skin = (133 <= cr <= 173 and 77 <= cb <= 128 and cr > cb) or \
+                      (77 <= cb <= 128 and r_val > 95 and g_val > 40 and b_val > 20 and r_val > g_val + 3 and r_val > b_val + 10 and cr >= 130 and cr > cb) or \
+                      (77 <= cb <= 128 and r_val >= 130 and g_val >= 115 and b_val >= 95 and r_val >= g_val and r_val >= b_val + 4 and cr >= 129 and cr > cb)
+
+            if is_skin:
+                continue
+
+            # 1. Green leafy vegetables (G strictly exceeds R and B; Hue in 70..175 degrees)
+            if 70 <= h <= 175 and s >= 30 and (g_val - r_val >= 8) and (g_val - b_val >= 12):
                 green_cnt += 1
-            # 5. Boiled egg highlight
-            elif s <= 38 and v >= 180:
+            # 2. Dal: yellow-amber lentils with rich turmeric saturation (Hue in 16..68 degrees)
+            elif 16 <= h <= 68 and s >= 70 and v >= 60 and (r_val - b_val >= 45) and (r_val >= g_val) and (g_val - b_val >= 20):
+                dal_cnt += 1
+                if 16 <= h <= 55 and s >= 80 and v >= 120:
+                    egg_cnt += 1
+            # 3. White rice: neutral achromatic, bright, low saturation
+            elif s <= 28 and v >= 165 and abs(r_val - g_val) <= 8 and abs(r_val - b_val) <= 10:
+                wr_cnt += 1
+            # 4. Spiced rice: turmeric gold / saffron rice
+            elif 25 <= h <= 70 and 50 <= s <= 170 and v >= 110 and (r_val - b_val >= 35):
+                sr_cnt += 1
+            # 5. Boiled egg: pure white highlight
+            elif s <= 20 and v >= 210 and abs(r_val - g_val) <= 8 and abs(r_val - b_val) <= 10:
                 egg_cnt += 1
             # 6. Egg curry / fry: red-amber spices
-            elif h <= 22 and s >= 60 and v >= 40:
+            elif h <= 40 and s >= 80 and v >= 50 and (r_val - g_val >= 30) and (r_val - b_val >= 50):
                 curry_egg_cnt += 1
             # 7. Chikki: jaggery brown
-            elif 10 <= h <= 28 and 75 <= s <= 230 and 45 <= v <= 180:
+            elif 20 <= h <= 52 and 80 <= s <= 210 and 45 <= v <= 160 and (r_val - b_val >= 30):
                 chikki_cnt += 1
             # 8. Ragi Java: dark purple-grey
-            elif v <= 105 and s <= 45:
+            elif v <= 90 and s <= 35 and abs(r_val - g_val) <= 10 and abs(r_val - b_val) <= 10:
                 ragi_cnt += 1
             # 9. Sweet Pongal: caramel jaggery rice
-            elif 12 <= h <= 30 and 55 <= s <= 195 and 65 <= v <= 205:
+            elif 24 <= h <= 56 and 65 <= s <= 180 and 70 <= v <= 190:
                 pongal_cnt += 1
-            # 10. Steel Plate / Vessel
-            elif s <= 35 and 60 <= v <= 230:
+            # 10. Steel Plate / Vessel: neutral metallic grey
+            elif s <= 18 and 70 <= v <= 215 and abs(r_val - g_val) <= 5 and abs(r_val - b_val) <= 5:
                 plate_cnt += 1
 
         wr_ratio = wr_cnt / tot
@@ -489,27 +635,27 @@ def _detect_indian_food_items_pillow(img_path: str) -> Tuple[List[str], List[str
         green_ratio = green_cnt / tot
         plate_ratio = plate_cnt / tot
 
-        if wr_ratio >= 0.035:
+        if wr_ratio >= 0.06:
             detected_dishes.append("White Rice (Steamed Rice)")
             detected_dishes.append("Cooked Rice (Chawal)")
 
-        if sr_ratio >= 0.045 and wr_ratio < 0.12:
+        if sr_ratio >= 0.05 and wr_ratio < 0.12:
             detected_dishes.append("Flavored / Spiced Rice (Palav / Biryani / Pulagam)")
             detected_dishes.append("Tamarind / Lemon Rice (Pulihora / Chitrannam)")
             if "Cooked Rice (Chawal)" not in detected_dishes:
                 detected_dishes.append("Cooked Rice (Chawal)")
 
-        if dal_ratio >= 0.028:
+        if dal_ratio >= 0.04:
             detected_dishes.append("Dal / Pappu (Lentil Curry)")
             detected_dishes.append("Dal / Sambar (Lentil Curry)")
             detected_dishes.append("Sambar (Vegetable Sambar)")
             detected_dishes.append("Rasam / Charu (Lentil Pepper Broth)")
-            if green_ratio >= 0.015:
+            if green_ratio >= 0.008:
                 detected_dishes.append("Leafy Dal (Akurapappu / Palakura Pappu)")
-        elif green_ratio >= 0.020:
+        elif green_ratio >= 0.015:
             detected_dishes.append("Leafy Dal (Akurapappu / Palakura Pappu)")
 
-        if green_ratio >= 0.015:
+        if green_ratio >= 0.008:
             detected_dishes.append("Mixed Vegetable Curry / Sabzi")
             detected_dishes.append("Vegetable Sabzi / Greens")
             detected_dishes.append("Aloo Kurma (Potato Curry)")
@@ -518,20 +664,20 @@ def _detect_indian_food_items_pillow(img_path: str) -> Tuple[List[str], List[str
             detected_dishes.append("Boiled Egg")
             detected_dishes.append("Boiled Eggs")
 
-        if curry_egg_cnt / tot >= 0.015:
+        if curry_egg_cnt / tot >= 0.012:
             detected_dishes.append("Egg Curry")
             detected_dishes.append("Egg Fry / Spiced Egg")
 
-        if chikki_cnt / tot >= 0.006:
+        if chikki_cnt / tot >= 0.008:
             detected_dishes.append("Peanut Chikki (Snack)")
 
-        if ragi_cnt / tot >= 0.018:
+        if ragi_cnt / tot >= 0.020:
             detected_dishes.append("Ragi-Java (Nutritional Malt Drink)")
 
-        if pongal_cnt / tot >= 0.030 and wr_ratio < 0.12:
+        if pongal_cnt / tot >= 0.035 and wr_ratio < 0.12:
             detected_dishes.append("Sweet Pongal (Bellam Pongali)")
 
-        if plate_ratio >= 0.04:
+        if plate_ratio >= 0.05:
             detected_dishes.append("Steel Thali / Dining Vessel")
 
         metrics = {
@@ -553,8 +699,20 @@ def _detect_indian_food_items_opencv(img, img_path: str) -> Tuple[List[str], Lis
     total_px = max(h * w, 1)
     detected_dishes = []
     yolo_food_vessels = []
+    metrics = {
+        "white_rice_ratio": 0.0,
+        "spiced_rice_ratio": 0.0,
+        "dal_ratio": 0.0,
+        "green_ratio": 0.0,
+        "plate_ratio": 0.0
+    }
 
-    # 1. YOLOv8m detection for culinary vessels and tableware
+    # 1. Skin & Hand Analysis Guard
+    skin_res = _analyze_skin_and_hands(img, img_path)
+    if skin_res["is_hand_closeup"] or skin_res["skin_pct"] >= 18.0:
+        return detected_dishes, yolo_food_vessels, metrics
+
+    # 2. YOLOv8m detection for culinary vessels and tableware
     det_model = _get_det_model()
     if det_model is not None:
         try:
@@ -569,50 +727,50 @@ def _detect_indian_food_items_opencv(img, img_path: str) -> Tuple[List[str], Lis
 
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    b, g, r = cv2.split(img)
+    r_i, g_i, b_i = r.astype(int), g.astype(int), b.astype(int)
+    skin_mask = skin_res.get("skin_mask")
+    non_skin = (~skin_mask).astype(bool) if skin_mask is not None else np.ones((h, w), dtype=bool)
 
-    # 2. Steamed White Rice (Chawal / Anna) — high luminance, low saturation (S <= 45)
-    white_rice_mask = cv2.inRange(hsv, np.array([0, 0, 140]), np.array([180, 45, 255]))
-    white_rice_ratio = float(np.count_nonzero(white_rice_mask) / total_px)
-    if white_rice_ratio >= 0.035:
+    h_c, s_c, v_c = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+
+    # 3. Steamed White Rice (Chawal / Anna) — neutral achromatic, bright, low saturation, non-skin
+    wr_bool = non_skin & (v_c >= 165) & (s_c <= 28) & (np.abs(r_i - g_i) <= 8) & (np.abs(r_i - b_i) <= 10)
+    white_rice_ratio = float(np.count_nonzero(wr_bool) / total_px)
+    if white_rice_ratio >= 0.06:
         detected_dishes.append("White Rice (Steamed Rice)")
         detected_dishes.append("Cooked Rice (Chawal)")
 
-    # 3. Flavored / Spiced Rice (Veg Palav / Biryani / Pulihora / Tamarind Rice / Lemon Rice / Pulagam)
-    spiced_rice_mask = cv2.inRange(hsv, np.array([14, 45, 110]), np.array([38, 170, 255]))
-    spiced_rice_ratio = float(np.count_nonzero(spiced_rice_mask) / total_px)
-    if spiced_rice_ratio >= 0.045 and white_rice_ratio < 0.12:
+    # 4. Flavored / Spiced Rice (Veg Palav / Biryani / Pulihora / Tamarind Rice / Lemon Rice / Pulagam)
+    sr_bool = non_skin & (h_c >= 14) & (h_c <= 36) & (s_c >= 50) & (s_c <= 170) & (v_c >= 110) & ((r_i - b_i) >= 35)
+    spiced_rice_ratio = float(np.count_nonzero(sr_bool) / total_px)
+    if spiced_rice_ratio >= 0.05 and white_rice_ratio < 0.12:
         detected_dishes.append("Flavored / Spiced Rice (Palav / Biryani / Pulagam)")
         detected_dishes.append("Tamarind / Lemon Rice (Pulihora / Chitrannam)")
         if "Cooked Rice (Chawal)" not in detected_dishes:
             detected_dishes.append("Cooked Rice (Chawal)")
 
-    # 4. Dal / Sambar / Rasam / Lentil Stews
-    dal_mask = cv2.inRange(hsv, np.array([7, 50, 45]), np.array([36, 255, 255]))
-    dal_ratio = float(np.count_nonzero(dal_mask) / total_px)
+    # 5. Dal / Sambar / Rasam / Lentil Stews — rich turmeric saturation & chrominance, non-skin
+    dal_bool = non_skin & (h_c >= 8) & (h_c <= 34) & (s_c >= 75) & (v_c >= 60) & ((r_i - b_i) >= 45) & (r_i >= g_i) & ((g_i - b_i) >= 20)
+    dal_ratio = float(np.count_nonzero(dal_bool) / total_px)
 
-    # Green Leafy Vegetables (Palak, Gongura, Thotakura, Methi, Curry leaves)
-    green_mask = cv2.inRange(hsv, np.array([32, 30, 25]), np.array([90, 255, 240]))
-    green_ratio = float(np.count_nonzero(green_mask) / total_px)
+    # 6. Green Leafy Vegetables (Palak, Gongura, Thotakura, Methi) — G strictly exceeds R and B
+    green_bool = non_skin & ((g_i - r_i) >= 8) & ((g_i - b_i) >= 12) & (h_c >= 35) & (h_c <= 88) & (s_c >= 35)
+    green_ratio = float(np.count_nonzero(green_bool) / total_px)
 
-    if dal_ratio >= 0.028:
+    if dal_ratio >= 0.04:
         detected_dishes.append("Dal / Pappu (Lentil Curry)")
         detected_dishes.append("Dal / Sambar (Lentil Curry)")
         detected_dishes.append("Sambar (Vegetable Sambar)")
         detected_dishes.append("Rasam / Charu (Lentil Pepper Broth)")
-
-        # Akurapappu / Leafy Dal check: check overlap between dilated dal and leafy greens
-        kernel = np.ones((5, 5), np.uint8)
-        dilated_dal = cv2.dilate(dal_mask, kernel, iterations=2)
-        dal_green_overlap = cv2.bitwise_and(dilated_dal, green_mask)
-        overlap_ratio = float(np.count_nonzero(dal_green_overlap) / total_px)
-
-        if overlap_ratio >= 0.003 or green_ratio >= 0.015:
+        if green_ratio >= 0.035:
             detected_dishes.append("Leafy Dal (Akurapappu / Palakura Pappu)")
-    elif green_ratio >= 0.020:
+    elif green_ratio >= 0.035:
         detected_dishes.append("Leafy Dal (Akurapappu / Palakura Pappu)")
 
-    # 5. Boiled Eggs (Smooth white/cream oval contours)
-    egg_mask = cv2.inRange(hsv, np.array([0, 0, 168]), np.array([180, 40, 255]))
+    # 7. Boiled Eggs (Smooth white/cream oval contours, non-skin)
+    egg_bool = non_skin & (v_c >= 210) & (s_c <= 20) & (np.abs(r_i - g_i) <= 8) & (np.abs(r_i - b_i) <= 10)
+    egg_mask = (egg_bool.astype(np.uint8)) * 255
     contours, _ = cv2.findContours(egg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     oval_count = 0
     for cnt in contours:
@@ -627,8 +785,9 @@ def _detect_indian_food_items_opencv(img, img_path: str) -> Tuple[List[str], Lis
         detected_dishes.append("Boiled Egg")
         detected_dishes.append("Boiled Eggs")
 
-    # 6. Egg Curry & Egg Fry / Spiced Egg (Eggs cooked in red/amber turmeric & chili masala)
-    curry_egg_mask = cv2.inRange(hsv, np.array([0, 60, 40]), np.array([22, 255, 220]))
+    # 8. Egg Curry & Egg Fry / Spiced Egg
+    curry_egg_bool = non_skin & (h_c <= 20) & (s_c >= 80) & (v_c >= 50) & ((r_i - g_i) >= 30) & ((r_i - b_i) >= 50)
+    curry_egg_mask = (curry_egg_bool.astype(np.uint8)) * 255
     ce_contours, _ = cv2.findContours(curry_egg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     ce_count = 0
     for cnt in ce_contours:
@@ -643,47 +802,48 @@ def _detect_indian_food_items_opencv(img, img_path: str) -> Tuple[List[str], Lis
         detected_dishes.append("Egg Curry")
         detected_dishes.append("Egg Fry / Spiced Egg")
 
-    # 7. Vegetable Curry & Aloo Kurma (Potato Kurma / Mixed Veg)
-    kurma_mask = cv2.inRange(hsv, np.array([16, 45, 60]), np.array([36, 210, 240]))
-    kurma_ratio = float(np.count_nonzero(kurma_mask) / total_px)
-    if green_ratio >= 0.015 or kurma_ratio >= 0.030:
+    # 9. Vegetable Curry & Aloo Kurma
+    kurma_bool = non_skin & (h_c >= 16) & (h_c <= 36) & (s_c >= 60) & (s_c <= 210) & (v_c >= 60) & (v_c <= 240)
+    kurma_ratio = float(np.count_nonzero(kurma_bool) / total_px)
+    if green_ratio >= 0.035 or kurma_ratio >= 0.040:
         detected_dishes.append("Mixed Vegetable Curry / Sabzi")
         detected_dishes.append("Vegetable Sabzi / Greens")
         detected_dishes.append("Aloo Kurma (Potato Curry)")
 
-    # 8. Chutneys (Gongura, Tomato, Pudina, Groundnut)
-    red_chutney_mask = cv2.inRange(hsv, np.array([0, 75, 60]), np.array([12, 255, 230]))
-    red_chutney_ratio = float(np.count_nonzero(red_chutney_mask) / total_px)
-    if 0.005 <= red_chutney_ratio <= 0.06:
+    # 10. Chutneys (Gongura, Tomato, Pudina, Groundnut)
+    red_chutney_bool = non_skin & (h_c <= 12) & (s_c >= 80) & (v_c >= 60) & (v_c <= 230)
+    red_chutney_ratio = float(np.count_nonzero(red_chutney_bool) / total_px)
+    if 0.008 <= red_chutney_ratio <= 0.06:
         detected_dishes.append("Chutney (Gongura / Tomato / Pudina / Groundnut)")
 
-    # 9. Peanut Chikki (Snack)
-    chikki_mask = cv2.inRange(hsv, np.array([10, 75, 45]), np.array([28, 230, 180]))
-    chikki_ratio = float(np.count_nonzero(chikki_mask) / total_px)
-    if 0.005 <= chikki_ratio <= 0.06:
+    # 11. Peanut Chikki (Snack)
+    chikki_bool = non_skin & (h_c >= 10) & (h_c <= 26) & (s_c >= 80) & (s_c <= 210) & (v_c >= 45) & (v_c <= 160) & ((r_i - b_i) >= 30)
+    chikki_ratio = float(np.count_nonzero(chikki_bool) / total_px)
+    if 0.008 <= chikki_ratio <= 0.06:
+        chikki_mask = (chikki_bool.astype(np.uint8)) * 255
         chikki_pixels = cv2.bitwise_and(gray, gray, mask=chikki_mask)
         edges = cv2.Canny(chikki_pixels, 50, 150)
         edge_density = np.count_nonzero(edges) / max(np.count_nonzero(chikki_mask), 1)
         if edge_density > 0.06:
             detected_dishes.append("Peanut Chikki (Snack)")
 
-    # 10. Ragi-Java (Nutritional Finger Millet Malt Drink)
-    ragi_mask = cv2.inRange(hsv, np.array([0, 5, 25]), np.array([180, 45, 105]))
-    ragi_ratio = float(np.count_nonzero(ragi_mask) / total_px)
+    # 12. Ragi-Java
+    ragi_bool = non_skin & (v_c <= 90) & (s_c <= 35) & (np.abs(r_i - g_i) <= 10) & (np.abs(r_i - b_i) <= 10)
+    ragi_ratio = float(np.count_nonzero(ragi_bool) / total_px)
     has_cup = any(('cup' in v.lower() or 'bowl' in v.lower() or 'bottle' in v.lower()) for v in yolo_food_vessels)
-    if (ragi_ratio >= 0.012 and has_cup) or ragi_ratio >= 0.025:
+    if (ragi_ratio >= 0.015 and has_cup) or ragi_ratio >= 0.030:
         detected_dishes.append("Ragi-Java (Nutritional Malt Drink)")
 
-    # 11. Sweet Pongal / Bellam Pongali
-    pongal_mask = cv2.inRange(hsv, np.array([12, 55, 65]), np.array([30, 195, 205]))
-    pongal_ratio = float(np.count_nonzero(pongal_mask) / total_px)
+    # 13. Sweet Pongal / Bellam Pongali
+    pongal_bool = non_skin & (h_c >= 12) & (h_c <= 28) & (s_c >= 65) & (s_c <= 180) & (v_c >= 70) & (v_c <= 190)
+    pongal_ratio = float(np.count_nonzero(pongal_bool) / total_px)
     if pongal_ratio >= 0.035 and white_rice_ratio < 0.12:
         detected_dishes.append("Sweet Pongal (Bellam Pongali)")
 
-    # 12. Steel Dining Thali / Compartment Plate / Vessel
-    plate_mask = cv2.inRange(hsv, np.array([0, 0, 60]), np.array([180, 35, 230]))
-    plate_ratio = float(np.count_nonzero(plate_mask) / total_px)
-    if plate_ratio >= 0.04 or any('bowl' in v.lower() for v in yolo_food_vessels):
+    # 14. Steel Dining Thali / Compartment Plate / Vessel — neutral metallic grey
+    plate_bool = non_skin & (s_c <= 18) & (v_c >= 70) & (v_c <= 215) & (np.abs(r_i - g_i) <= 5) & (np.abs(r_i - b_i) <= 5)
+    plate_ratio = float(np.count_nonzero(plate_bool) / total_px)
+    if plate_ratio >= 0.05 or any('bowl' in v.lower() for v in yolo_food_vessels):
         detected_dishes.append("Steel Thali / Dining Vessel")
 
     metrics = {
@@ -955,6 +1115,20 @@ def food_quality_check(
             "cv_processed_at": now
         }
 
+    # 2. Skin and Hand Rejection Guard
+    skin_analysis = _analyze_skin_and_hands(img, image_path)
+    if skin_analysis["is_hand_closeup"] or skin_analysis["skin_pct"] >= 18.0:
+        return {
+            "cv_status": "CV_FLAG",
+            "cv_notes": f"Human hand/skin detected ({skin_analysis['skin_pct']:.1f}% of frame). No mid-day meal or cooking vessels visible. Photo flagged for inspection review.",
+            "cv_confidence": 0.98,
+            "cv_match_percentage": 0.0,
+            "detected_items": [],
+            "matched_items": [],
+            "missing_items": expected_menu_items,
+            "cv_processed_at": now
+        }
+
     # 3. Optional Gemini Vision Multimodal Model (if API key available)
     api_key = _get_gemini_api_key()
     if api_key:
@@ -978,32 +1152,6 @@ def food_quality_check(
     try:
         detected_dishes, yolo_vessels, metrics = _detect_indian_food_items(img, image_path)
 
-        # Skin & Hand Analysis
-        max_skin_ratio = 0.0
-        if HAS_OPENCV and cv2 is not None and hasattr(img, "shape"):
-            ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
-            skin_mask = cv2.inRange(ycrcb, np.array([0, 138, 85]), np.array([255, 170, 125]))
-            cnts, _ = cv2.findContours(skin_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            max_skin_area = max([cv2.contourArea(c) for c in cnts]) if cnts else 0
-            total_px = max(img.shape[0] * img.shape[1], 1)
-            max_skin_ratio = max_skin_area / total_px
-        elif HAS_PIL and Image is not None and np is not None:
-            thumb = (img if hasattr(img, "resize") else Image.open(image_path)).resize((160, 120))
-            rgb_arr = np.array(thumb)
-            r, g, b = rgb_arr[:, :, 0], rgb_arr[:, :, 1], rgb_arr[:, :, 2]
-            s_mask = (r > 120) & (g > 50) & (b > 30) & (r > g + 15) & (g > b) & ((r - b) > 20)
-            max_skin_ratio = float(np.count_nonzero(s_mask) / (160 * 120))
-
-        # Hand / skin rejection: if a huge continuous skin contour takes up >75% of frame with NO culinary vessels
-        if max_skin_ratio > 0.75 and not yolo_vessels:
-            return {
-                "cv_status": "CV_FLAG",
-                "cv_notes": f"Human hand/skin close-up detected ({max_skin_ratio:.0%} skin area, no culinary vessels). Flagged.",
-                "cv_confidence": 0.96,
-                "cv_match_percentage": 0.0,
-                "cv_processed_at": now
-            }
-
         # Core food items from mid-day meal menu taxonomy
         FOOD_DISH_ITEMS = {
             "White Rice (Steamed Rice)", "Cooked Rice (Chawal)", "Flavored / Spiced Rice (Palav / Biryani / Pulagam)",
@@ -1023,6 +1171,24 @@ def food_quality_check(
                 "cv_notes": f"No recognizable food items or cooking vessels detected for Zone {resolved_zone} {resolved_day} menu. Flagged.",
                 "cv_confidence": 0.88,
                 "cv_match_percentage": 0.0,
+                "detected_items": [],
+                "matched_items": [],
+                "missing_items": expected_menu_items,
+                "cv_processed_at": now
+            }
+
+        # Multi-item and culinary vessel requirement:
+        # A legitimate meal requires either a serving vessel (plate/bowl/cauldron) OR at least 2 distinct food items
+        plate_found = any("thali" in d.lower() or "vessel" in d.lower() for d in detected_dishes) or len(yolo_vessels) >= 1 or metrics.get("plate_ratio", 0) >= 0.04
+        if len(core_foods) < 2 and not plate_found:
+            return {
+                "cv_status": "CV_FLAG",
+                "cv_notes": f"Insufficient culinary context (only {len(core_foods)} food component and no serving plate or cooking vessel detected). Flagged.",
+                "cv_confidence": 0.85,
+                "cv_match_percentage": 0.0,
+                "detected_items": detected_dishes,
+                "matched_items": [],
+                "missing_items": expected_menu_items,
                 "cv_processed_at": now
             }
 
@@ -1036,8 +1202,8 @@ def food_quality_check(
             all_found += [v.split()[0].title() for v in yolo_vessels if v.split()[0].title() not in all_found]
         found_str = ", ".join(all_found[:8])
 
-        # Flag if under 50% statutory menu compliance
-        is_pass = match_pct >= 50.0 and (len(core_foods) >= 1 or len(yolo_vessels) >= 1)
+        # Flag if under 50% statutory menu compliance or missing core components
+        is_pass = (match_pct >= 50.0) and (len(core_foods) >= 2 or plate_found)
         status = "CV_PASS" if is_pass else "CV_FLAG"
 
         confidence = 0.95 if any(f in detected_dishes for f in ["White Rice (Steamed Rice)", "Cooked Rice (Chawal)", "Dal / Sambar (Lentil Curry)", "Boiled Egg"]) else 0.88
@@ -1133,44 +1299,83 @@ def _pillow_dining_density_count(image_path: str, now: str = None) -> dict:
     if not now:
         now = datetime.utcnow().isoformat()
     try:
+        # 1. Skin & Hand Analysis Guard
+        skin_res = _analyze_skin_and_hands(None, image_path)
+        skin_pct = skin_res["skin_pct"]
+
+        # Reject hand / skin close-up
+        if skin_res["is_hand_closeup"] or skin_pct >= 18.0:
+            return {
+                "cv_student_count": 0,
+                "cv_status": "CV_FLAG",
+                "cv_notes": f"Hand/skin close-up detected ({skin_pct:.1f}% skin area). No dining hall or seated students visible. Flagged.",
+                "cv_confidence": 0.96,
+                "cv_processed_at": now
+            }
+
+        # Reject empty / zero-person frames
+        if skin_pct < 0.8:
+            return {
+                "cv_student_count": 0,
+                "cv_status": "CV_FLAG",
+                "cv_notes": "Cloud Vision detected 0 students in frame. Photo flagged (expected students eating during mid-day meal).",
+                "cv_confidence": 0.90,
+                "cv_processed_at": now
+            }
+
         pil_img = Image.open(image_path)
         if pil_img.mode != "RGB":
             pil_img = pil_img.convert("RGB")
         thumb = pil_img.resize((320, 240))
         rgb_arr = np.array(thumb) if np is not None else None
 
+        student_count = 0
         if rgb_arr is not None:
             r = rgb_arr[:, :, 0].astype(int)
             g = rgb_arr[:, :, 1].astype(int)
             b = rgb_arr[:, :, 2].astype(int)
-            skin_mask = (r > 95) & (g > 40) & (b > 20) & \
-                        ((np.maximum(r, np.maximum(g, b)) - np.minimum(r, np.minimum(g, b))) > 15) & \
-                        (np.abs(r - g) > 15) & (r > g) & (r > b)
-            skin_ratio = np.count_nonzero(skin_mask) / (320 * 240)
+            cr = 128.0 + 0.500 * r - 0.418688 * g - 0.081312 * b
+            cb = 128.0 - 0.168736 * r - 0.331264 * g + 0.500 * b
+            s_std = (cr >= 133) & (cr <= 173) & (cb >= 77) & (cb <= 128) & (cr > cb)
+            s_rgb = (r > 95) & (g > 40) & (b > 20) & (r > g + 3) & (r > b + 10) & (cr >= 130) & (cr > cb)
+            skin_mask = (s_std | s_rgb).astype(np.uint8)
 
-            # Analyze 16x16 grid clusters along dining rows
-            grid_h, grid_w = 240 // 16, 320 // 16
-            clusters = 0
-            for gy in range(grid_h):
-                in_c = False
-                for gx in range(grid_w):
-                    cell = skin_mask[gy*16:(gy+1)*16, gx*16:(gx+1)*16]
-                    if np.count_nonzero(cell) >= 20:
-                        if not in_c:
-                            clusters += 1
-                            in_c = True
+            if HAS_OPENCV and cv2 is not None:
+                num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(skin_mask)
+                if num_labels > 1:
+                    areas = stats[1:, cv2.CC_STAT_AREA]
+                    # Valid seated student face in 320x240 image has 15 to 650 px
+                    valid_faces = [a for a in areas if 15 <= a <= 650]
+                    # If largest component is huge (> 1500 px), it is a limb close-up
+                    if len(areas) > 0 and np.max(areas) > 1500:
+                        student_count = 0
                     else:
-                        in_c = False
-            student_count = max(min(clusters, 45), 1) if skin_ratio > 0.012 else 0
-        else:
-            student_count = 14
+                        student_count = len(valid_faces)
+            else:
+                # Fast grid scan for discrete student face clusters
+                grid_h, grid_w = 240 // 16, 320 // 16
+                clusters = 0
+                max_cell = 0
+                for gy in range(grid_h):
+                    for gx in range(grid_w):
+                        cell = skin_mask[gy*16:(gy+1)*16, gx*16:(gx+1)*16]
+                        c_cnt = np.count_nonzero(cell)
+                        if c_cnt > max_cell:
+                            max_cell = c_cnt
+                        # Discrete face: between 15 and 140 skin pixels in 16x16 cell
+                        if 15 <= c_cnt <= 140:
+                            clusters += 1
+                if max_cell >= 220:
+                    student_count = 0
+                else:
+                    student_count = max(min(clusters, 45), 0)
 
         if student_count == 0:
             return {
                 "cv_student_count": 0,
                 "cv_status": "CV_FLAG",
                 "cv_notes": "Cloud Vision detected 0 students in frame. Photo flagged (expected students eating during mid-day meal).",
-                "cv_confidence": 0.85,
+                "cv_confidence": 0.88,
                 "cv_processed_at": now
             }
 
@@ -1184,10 +1389,10 @@ def _pillow_dining_density_count(image_path: str, now: str = None) -> dict:
     except Exception as e:
         logger.error(f"Student counting fallback error: {e}")
         return {
-            "cv_student_count": 1,
-            "cv_status": "CV_PASS",
-            "cv_notes": "Student dining activity verified.",
-            "cv_confidence": 0.75,
+            "cv_student_count": 0,
+            "cv_status": "CV_FLAG",
+            "cv_notes": f"Dining analysis completed with flag: {str(e)[:60]}",
+            "cv_confidence": 0.60,
             "cv_processed_at": now
         }
 
@@ -1204,9 +1409,9 @@ def count_students_in_image(image_path: str) -> dict:
     image_path = os.path.abspath(image_path)
 
     mean_val = 128.0
-    max_skin_ratio = 0.0
 
     # 1. Readability & Exposure Check
+    img = None
     if HAS_OPENCV and cv2 is not None:
         img = cv2.imread(image_path)
         if img is None:
@@ -1219,13 +1424,6 @@ def count_students_in_image(image_path: str) -> dict:
             }
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         mean_val = float(np.mean(gray))
-
-        total_px = max(img.shape[0] * img.shape[1], 1)
-        ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
-        skin_mask = cv2.inRange(ycrcb, np.array([0, 138, 85]), np.array([255, 170, 125]))
-        cnts, _ = cv2.findContours(skin_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        max_skin_area = max([cv2.contourArea(c) for c in cnts]) if cnts else 0
-        max_skin_ratio = max_skin_area / total_px
     else:
         try:
             pil_img = Image.open(image_path)
@@ -1234,13 +1432,7 @@ def count_students_in_image(image_path: str) -> dict:
             gray = pil_img.convert("L")
             stat = ImageStat.Stat(gray)
             mean_val = float(stat.mean[0])
-
-            thumb = pil_img.resize((160, 120))
-            rgb_arr = np.array(thumb) if np is not None else None
-            if rgb_arr is not None:
-                r, g, b = rgb_arr[:, :, 0], rgb_arr[:, :, 1], rgb_arr[:, :, 2]
-                s_mask = (r > 120) & (g > 50) & (b > 30) & (r > g + 15) & (g > b) & ((r - b) > 20)
-                max_skin_ratio = float(np.count_nonzero(s_mask) / (160 * 120))
+            img = pil_img
         except Exception:
             return {
                 "cv_student_count": 0,
@@ -1267,19 +1459,29 @@ def count_students_in_image(image_path: str) -> dict:
             "cv_processed_at": now
         }
 
-    # Hand / skin close-up guard (only triggers when a single skin blob blankets >= 75% of frame)
-    if max_skin_ratio > 0.75:
+    # 2. Skin & Hand Rejection Guard
+    skin_res = _analyze_skin_and_hands(img, image_path)
+    skin_pct = skin_res["skin_pct"]
+    if skin_res["is_hand_closeup"] or skin_pct >= 18.0:
         return {
             "cv_student_count": 0,
             "cv_status": "CV_FLAG",
-            "cv_notes": f"Hand/skin close-up detected ({max_skin_ratio:.0%} skin area). No students visible in dining area. Flagged.",
-            "cv_confidence": 0.94,
+            "cv_notes": f"Hand/skin close-up detected ({skin_pct:.1f}% skin area). No dining hall or seated students visible. Flagged.",
+            "cv_confidence": 0.96,
+            "cv_processed_at": now
+        }
+    if skin_pct < 0.8:
+        return {
+            "cv_student_count": 0,
+            "cv_status": "CV_FLAG",
+            "cv_notes": "Zero students detected in dining frame. Photo flagged (expected students eating during mid-day meal).",
+            "cv_confidence": 0.92,
             "cv_processed_at": now
         }
 
-    # 2. Priority 1: YOLOv8m Detector (when ultralytics & weights available)
+    # 3. Priority 1: YOLOv8m Detector (when ultralytics & weights available)
     det_model = _get_det_model() if HAS_YOLO else None
-    if det_model is not None and HAS_OPENCV:
+    if det_model is not None and HAS_OPENCV and img is not None and hasattr(img, "shape"):
         try:
             results = det_model(image_path, conf=0.18, verbose=False, classes=[0], imgsz=1024, iou=0.45)
             candidate_boxes = []
@@ -1321,9 +1523,10 @@ def count_students_in_image(image_path: str) -> dict:
 
             if student_count == 0:
                 # Secondary dining cluster check if YOLO finds 0 (e.g., partial occlusion, low tables)
-                cluster_res = _pillow_dining_density_count(image_path)
-                if cluster_res and cluster_res.get("cv_student_count", 0) > 0:
-                    return cluster_res
+                if 0.8 <= skin_pct <= 15.0 and skin_res.get("max_blob_ratio", 0) <= 0.05:
+                    cluster_res = _pillow_dining_density_count(image_path)
+                    if cluster_res and cluster_res.get("cv_student_count", 0) > 0:
+                        return cluster_res
                 return {
                     "cv_student_count": 0,
                     "cv_status": "CV_FLAG",
@@ -1343,7 +1546,7 @@ def count_students_in_image(image_path: str) -> dict:
         except Exception as e:
             logger.warning(f"YOLO detector exception, trying fallback: {e}")
 
-    # 3. Priority 2: Gemini Vision API (if API key available)
+    # 4. Priority 2: Gemini Vision API (if API key available)
     api_key = _get_gemini_api_key()
     if api_key:
         gemini_res = _gemini_student_count(image_path, api_key)
@@ -1351,5 +1554,5 @@ def count_students_in_image(image_path: str) -> dict:
             gemini_res["cv_processed_at"] = now
             return gemini_res
 
-    # 4. Priority 3: Pillow Dining Crowd Density Clustering (Pure Python / Cloud Serverless)
+    # 5. Priority 3: Pillow Dining Crowd Density Clustering (Pure Python / Cloud Serverless)
     return _pillow_dining_density_count(image_path, now)

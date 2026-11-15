@@ -15,5 +15,6 @@ uploads
 **/*.log
 **/*.db
 *.db
+!smart-school-iot/backend/smart_school.db
 scratch/
 **/.system_generated

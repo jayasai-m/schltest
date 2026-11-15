@@ -18,14 +18,15 @@ upload_dir = os.path.join(tmp_dir, "uploads")
 os.environ["UPLOAD_DIR"] = upload_dir
 os.makedirs(upload_dir, exist_ok=True)
 
-# Copy bundled SQLite database to writable temp directory on cold start
+# Copy bundled SQLite database to writable temp directory on cold start or update
 tmp_db = os.path.join(tmp_dir, "smart_school.db")
 src_db = os.path.join(BACKEND_DIR, "smart_school.db")
-if not os.path.exists(tmp_db) and os.path.exists(src_db):
-    try:
-        shutil.copy(src_db, tmp_db)
-        print(f">>> Copied pre-seeded smart_school.db to {tmp_db}")
-    except Exception as e:
-        print(f"Notice: Failed to copy SQLite db to temp: {e}")
+if os.path.exists(src_db):
+    if not os.path.exists(tmp_db) or os.path.getmtime(src_db) > os.path.getmtime(tmp_db):
+        try:
+            shutil.copy2(src_db, tmp_db)
+            print(f">>> Copied updated smart_school.db to {tmp_db}")
+        except Exception as e:
+            print(f"Notice: Failed to copy SQLite db to temp: {e}")
 
 from app.main import app
