@@ -109,7 +109,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
     try {
       const constraints = {
         video: {
-          facingMode: facing,
+          facingMode: facing ? { ideal: facing } : 'environment',
           width: { ideal: 1280 },
           height: { ideal: 720 }
         },
@@ -118,21 +118,21 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
+      setCameraActive(true);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.play().catch(() => {});
       }
-      setCameraActive(true);
     } catch (err) {
-      console.warn("Primary camera access error, trying fallback:", err);
+      console.warn("Primary camera access error, trying basic fallback:", err);
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         streamRef.current = stream;
+        setCameraActive(true);
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           videoRef.current.play().catch(() => {});
         }
-        setCameraActive(true);
       } catch (fallbackErr) {
         setCameraActive(false);
         setCameraError('Unable to access camera. Please allow camera permissions in your browser to capture photos.');
@@ -149,19 +149,40 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
     setCameraActive(false);
   };
 
-  // Keep camera running while modal is open
+  // Camera stream synchronization with DOM video element
   useEffect(() => {
-    if (isOpen) {
-      if (category === 'STUDENT_EATING' || !singlePreviewUrl) {
-        startCamera(facingMode);
-      } else {
-        stopCamera();
+    if (cameraActive && videoRef.current && streamRef.current) {
+      if (videoRef.current.srcObject !== streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
       }
-    } else {
-      stopCamera();
+      videoRef.current.play().catch(() => {});
     }
-    return () => stopCamera();
-  }, [isOpen, category, singlePreviewUrl]);
+  }, [cameraActive, selectedAngle, category]);
+
+  // Keep camera running while modal is open and active view needs live capture
+  useEffect(() => {
+    if (!isOpen) {
+      stopCamera();
+      return;
+    }
+
+    const isCurrentAngleCaptured =
+      category === 'STUDENT_EATING' && Boolean(capturedAnglePhotos[selectedAngle - 1]);
+    const isSingleCaptured =
+      category !== 'STUDENT_EATING' && Boolean(singlePreviewUrl);
+
+    if (isCurrentAngleCaptured || isSingleCaptured) {
+      stopCamera();
+    } else {
+      startCamera(facingMode);
+    }
+  }, [
+    isOpen,
+    category,
+    selectedAngle,
+    singlePreviewUrl,
+    Boolean(capturedAnglePhotos[selectedAngle - 1])
+  ]);
 
   // Toggle Camera Front/Back
   const toggleFacingMode = () => {
@@ -278,6 +299,18 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
   const captureFromVideo = async () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
+
+    // Safety check: ensure video is actively streaming and decoded frame exists
+    if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+      console.warn("Camera video frame is not ready yet, retrying...");
+      setTimeout(() => {
+        if (videoRef.current && videoRef.current.readyState >= 2) {
+          captureFromVideo();
+        }
+      }, 200);
+      return;
+    }
+
     const width = video.videoWidth || 1280;
     const height = video.videoHeight || 720;
 
@@ -330,7 +363,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
     startCamera(facingMode);
   };
 
-  // Clear specific angle in multi-angle mode
+  // Clear specific angle in multi-angle mode and reactivate camera for that angle
   const handleRetakeAngle = (idx) => {
     setCapturedAnglePhotos((prev) => {
       const updated = [...prev];
@@ -341,6 +374,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
       return updated;
     });
     setSelectedAngle(idx + 1);
+    startCamera(facingMode);
   };
 
   // Close and cleanup
@@ -685,15 +719,19 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                   <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
                     {EIGHT_ANGLES.map((ang, idx) => {
                       const photoObj = capturedAnglePhotos[idx];
+                      const isSelected = selectedAngle === ang.id;
                       return (
                         <div
                           key={ang.id}
-                          className={`relative rounded-md border h-18 flex flex-col items-center justify-center overflow-hidden transition-all ${
+                          onClick={() => setSelectedAngle(ang.id)}
+                          className={`relative rounded-md border h-18 flex flex-col items-center justify-center overflow-hidden transition-all cursor-pointer ${
                             photoObj
-                              ? 'border-emerald-500 bg-black shadow-xs'
-                              : selectedAngle === ang.id
+                              ? isSelected
+                                ? 'border-emerald-600 bg-black ring-2 ring-emerald-400 shadow-md'
+                                : 'border-emerald-500 bg-black shadow-xs opacity-90 hover:opacity-100'
+                              : isSelected
                               ? 'border-dashed border-teal-500 bg-white ring-2 ring-teal-400'
-                              : 'border-dashed border-slate-300 bg-slate-50'
+                              : 'border-dashed border-slate-300 bg-slate-50 hover:bg-teal-50'
                           }`}
                         >
                           {photoObj ? (
@@ -703,29 +741,28 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                                 alt={`Angle ${ang.id}`}
                                 className="w-full h-full object-cover"
                               />
-                              <div className="absolute inset-x-0 bottom-0 bg-slate-950/80 p-0.5 flex items-center justify-between text-[8px] text-white">
+                              <div className="absolute inset-x-0 bottom-0 bg-slate-950/85 p-0.5 flex items-center justify-between text-[8px] text-white">
                                 <span className="font-bold pl-0.5">#{ang.id}</span>
                                 <button
                                   type="button"
-                                  onClick={() => handleRetakeAngle(idx)}
-                                  className="text-rose-300 hover:text-white px-1 font-bold cursor-pointer"
-                                  title="Retake this angle"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRetakeAngle(idx);
+                                  }}
+                                  className="text-rose-400 hover:text-rose-200 px-1 font-bold cursor-pointer"
+                                  title={`Retake Angle #${ang.id}`}
                                 >
                                   ✕
                                 </button>
                               </div>
                             </>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedAngle(ang.id)}
-                              className="w-full h-full flex flex-col items-center justify-center p-1 text-center cursor-pointer hover:bg-teal-50"
-                            >
+                            <div className="w-full h-full flex flex-col items-center justify-center p-1 text-center">
                               <Camera className="w-3.5 h-3.5 text-slate-400 mb-0.5" />
                               <span className="text-[8px] text-slate-600 font-bold truncate max-w-full">
                                 #{ang.id} {ang.label.split(' ')[0]}
                               </span>
-                            </button>
+                            </div>
                           )}
                         </div>
                       );
@@ -756,7 +793,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                 <Camera className="w-3.5 h-3.5 text-teal-600" />
                 <span>
                   {category === 'STUDENT_EATING'
-                    ? `Live Camera — Capturing [Angle ${currentAngleObj.id}/8: ${currentAngleObj.label}]`
+                    ? `Camera Viewfinder — Angle ${currentAngleObj.id}/8: ${currentAngleObj.label}`
                     : 'Camera Viewfinder (Direct In-App Capture)'}
                 </span>
               </label>
@@ -771,7 +808,7 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
             {/* Viewfinder Window */}
             <div className="relative w-full h-72 sm:h-84 bg-slate-950 rounded-xl border border-slate-300 overflow-hidden flex flex-col items-center justify-center">
               
-              {/* Single photo preview (for Meal Prep / Hygiene) */}
+              {/* CASE 1: Single photo preview (for Meal Prep / Kitchen Hygiene) */}
               {category !== 'STUDENT_EATING' && singlePreviewUrl ? (
                 <div className="relative w-full h-full flex items-center justify-center bg-black">
                   <img
@@ -792,11 +829,85 @@ export const StaffUploadModal = ({ isOpen, onClose, onUploadSuccess, schoolName 
                     <span>Retake Photo</span>
                   </button>
                 </div>
+              ) : category === 'STUDENT_EATING' && capturedAnglePhotos[selectedAngle - 1] ? (
+                /* CASE 2: Student Count - Selected Angle is already captured (Preview with Retake) */
+                <div className="relative w-full h-full flex items-center justify-center bg-black">
+                  <img
+                    src={capturedAnglePhotos[selectedAngle - 1].previewUrl}
+                    alt={`Angle ${selectedAngle} Captured Preview`}
+                    className="w-full h-full object-contain"
+                  />
+                  
+                  {/* Top HUD Badges */}
+                  <div className="absolute top-3 inset-x-3 flex items-center justify-between pointer-events-none">
+                    <div className="px-2.5 py-1 rounded-md bg-emerald-600 text-white text-xs font-semibold shadow-xs flex items-center space-x-1 pointer-events-auto">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Angle {selectedAngle}/8 ({currentAngleObj.label}) Captured</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRetakeAngle(selectedAngle - 1)}
+                      className="px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-xs flex items-center space-x-1.5 transition-all cursor-pointer pointer-events-auto"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Retake Angle #{selectedAngle}</span>
+                    </button>
+                  </div>
+
+                  {/* Bottom Controls Bar for Captured Angle */}
+                  <div className="absolute bottom-0 inset-x-0 bg-slate-900/90 backdrop-blur-xs p-3 text-left border-t border-slate-700 flex items-center justify-between">
+                    <div className="text-[11px] text-slate-200 font-mono flex items-center space-x-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                      <span>Angle #{selectedAngle} stamped with GPS & timestamp</span>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => handleRetakeAngle(selectedAngle - 1)}
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-rose-300 hover:text-white border border-slate-600 text-xs font-semibold flex items-center space-x-1 transition-colors cursor-pointer"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Retake</span>
+                      </button>
+
+                      {capturedAnglesCount < 8 ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextEmptyIndex = capturedAnglePhotos.findIndex((slot) => !slot);
+                            if (nextEmptyIndex !== -1) {
+                              setSelectedAngle(nextEmptyIndex + 1);
+                            } else if (selectedAngle < 8) {
+                              setSelectedAngle(selectedAngle + 1);
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold flex items-center space-x-1 transition-colors cursor-pointer"
+                        >
+                          <span>Capture Next Angle</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <span className="text-emerald-400 text-xs font-bold flex items-center space-x-1">
+                          <Check className="w-3.5 h-3.5" />
+                          <span>All 8 Angles Ready</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               ) : cameraActive ? (
-                /* LIVE CAMERA VIEW */
+                /* CASE 3: Live Camera View */
                 <div className="relative w-full h-full bg-black">
                   <video
-                    ref={videoRef}
+                    ref={(el) => {
+                      videoRef.current = el;
+                      if (el && streamRef.current && el.srcObject !== streamRef.current) {
+                        el.srcObject = streamRef.current;
+                        el.play().catch(() => {});
+                      }
+                    }}
                     autoPlay
                     playsInline
                     muted
