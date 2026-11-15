@@ -29,4 +29,16 @@ if os.path.exists(src_db):
         except Exception as e:
             print(f"Notice: Failed to copy SQLite db to temp: {e}")
 
+# Copy bundled uploads to writable temp uploads directory on cold start
+src_uploads = os.path.join(BACKEND_DIR, "uploads")
+if os.path.exists(src_uploads):
+    for f in os.listdir(src_uploads):
+        sf = os.path.join(src_uploads, f)
+        df = os.path.join(upload_dir, f)
+        if os.path.isfile(sf) and not os.path.exists(df):
+            try:
+                shutil.copy2(sf, df)
+            except Exception:
+                pass
+
 from app.main import app

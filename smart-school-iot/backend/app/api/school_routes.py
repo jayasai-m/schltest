@@ -153,29 +153,32 @@ def get_school_meals(current_user: User = Depends(require_school), db: Session =
         ImageSubmission.school_id == current_user.school_id
     ).order_by(ImageSubmission.created_at.desc()).all()
 
-    # Reconcile legacy false-positive passes against new CV engine
+    # Reconcile existing images against new precision CV engine
     reconciled = False
     for img in images:
-        if img.cv_status == "CV_PASS":
-            fn = os.path.basename(img.image_url) if img.image_url else ""
-            p = os.path.join(UPLOAD_DIR, fn)
-            if os.path.exists(p):
-                if img.category in ("MEAL_PREPARATION", "KITCHEN_HYGIENE"):
-                    res = food_quality_check(p, zone=2, day_of_week="Monday", menu_description=img.menu_description or "")
-                    if res["cv_status"] == "CV_FLAG":
-                        img.cv_status = "CV_FLAG"
-                        img.status = "CV_FLAG"
-                        img.cv_notes = res["cv_notes"]
-                        img.cv_match_percentage = 0.0
-                        reconciled = True
-                elif img.category == "STUDENT_EATING":
-                    res = count_students_in_image(p)
-                    if res.get("cv_status") == "CV_FLAG" or res.get("cv_student_count", 0) == 0:
-                        img.cv_status = "CV_FLAG"
-                        img.status = "CV_FLAG"
-                        img.cv_student_count = 0
-                        img.cv_notes = res.get("cv_notes")
-                        reconciled = True
+        fn = os.path.basename(img.image_url) if img.image_url else ""
+        p = os.path.join(UPLOAD_DIR, fn)
+        if os.path.exists(p):
+            if img.category in ("MEAL_PREPARATION", "KITCHEN_HYGIENE"):
+                res = food_quality_check(p, zone=None, day_of_week=None, menu_description=img.menu_description or "", meal_type=img.meal_type or "")
+                new_status = res["cv_status"]
+                new_match = res.get("cv_match_percentage", 0.0)
+                if img.cv_status != new_status or img.cv_match_percentage != new_match:
+                    img.cv_status = new_status
+                    img.status = new_status
+                    img.cv_notes = res["cv_notes"]
+                    img.cv_match_percentage = new_match
+                    reconciled = True
+            elif img.category == "STUDENT_EATING":
+                res = count_students_in_image(p)
+                new_status = res["cv_status"]
+                new_cnt = res.get("cv_student_count", 0)
+                if img.cv_status != new_status or img.cv_student_count != new_cnt:
+                    img.cv_status = new_status
+                    img.status = new_status
+                    img.cv_student_count = new_cnt
+                    img.cv_notes = res.get("cv_notes")
+                    reconciled = True
     if reconciled:
         try:
             db.commit()
