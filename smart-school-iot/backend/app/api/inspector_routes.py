@@ -86,7 +86,7 @@ def get_inspector_dashboard(
         today_img = db.query(ImageSubmission).filter(
             ImageSubmission.school_id == s.id,
             ImageSubmission.created_at >= today_start
-        ).order_by(ImageSubmission.created_at.desc()).first()
+        ).order_by(ImageSubmission.id.desc()).first()
         
         latest_img = None
         has_today = bool(today_img)
@@ -95,7 +95,7 @@ def get_inspector_dashboard(
         else:
             latest_img = db.query(ImageSubmission).filter(
                 ImageSubmission.school_id == s.id
-            ).order_by(ImageSubmission.created_at.desc()).first()
+            ).order_by(ImageSubmission.id.desc()).first()
             ver_status = latest_img.status if latest_img else "NO_SUBMISSION"
             
         schools_overview.append({
@@ -117,7 +117,7 @@ def get_inspector_dashboard(
     
     recent_images = db.query(ImageSubmission).filter(
         ImageSubmission.school_id.in_(assigned_ids)
-    ).order_by(ImageSubmission.created_at.desc()).limit(10).all()
+    ).order_by(ImageSubmission.id.desc()).limit(10).all()
     
     enriched_images = []
     for img in recent_images:
@@ -167,13 +167,13 @@ def get_inspector_schools(
         today_img = db.query(ImageSubmission).filter(
             ImageSubmission.school_id == s.id,
             ImageSubmission.created_at >= today_start
-        ).order_by(ImageSubmission.created_at.desc()).first()
+        ).order_by(ImageSubmission.id.desc()).first()
         
         latest_img = None
         if not today_img:
             latest_img = db.query(ImageSubmission).filter(
                 ImageSubmission.school_id == s.id
-            ).order_by(ImageSubmission.created_at.desc()).first()
+            ).order_by(ImageSubmission.id.desc()).first()
             
         ver_today = today_img.status if today_img else (latest_img.status if latest_img else "NO_SUBMISSION")
         
@@ -298,7 +298,7 @@ def get_inspector_meals(
     if status_filter:
         query_img = query_img.filter(ImageSubmission.status == status_filter)
         
-    images = query_img.order_by(ImageSubmission.created_at.desc()).all()
+    images = query_img.order_by(ImageSubmission.id.desc()).all()
     
     enriched_images = []
     for img in images:

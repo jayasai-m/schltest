@@ -28,9 +28,14 @@ import tempfile
 _tmp_dir = "/tmp" if os.name != "nt" else tempfile.gettempdir()
 _backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _default_uploads = os.path.join(_tmp_dir, "uploads") if (os.getenv("VERCEL") or not os.access(".", os.W_OK)) else os.path.join(_backend_dir, "uploads")
-UPLOAD_DIR = os.getenv("UPLOAD_DIR") or _default_uploads
-if not os.path.isabs(UPLOAD_DIR) or (os.getenv("VERCEL") and not UPLOAD_DIR.startswith(_tmp_dir)):
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", _default_uploads)
+if not os.path.isabs(UPLOAD_DIR):
+    UPLOAD_DIR = os.path.join(_backend_dir, UPLOAD_DIR)
+try:
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+except OSError:
     UPLOAD_DIR = os.path.join(_tmp_dir, "uploads")
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 def get_live_hardware_status(school: School) -> dict:
     if not school.last_hardware_ping:
@@ -68,7 +73,7 @@ def get_school_dashboard(current_user: User = Depends(require_school), db: Sessi
     # Recent images
     recent_images = db.query(ImageSubmission).filter(
         ImageSubmission.school_id == school.id
-    ).order_by(ImageSubmission.created_at.desc()).limit(5).all()
+    ).order_by(ImageSubmission.id.desc()).limit(5).all()
     
     return {
         "school": {
@@ -154,11 +159,11 @@ def get_school_meals(current_user: User = Depends(require_school), db: Session =
 
     meals = db.query(MealSubmission).filter(
         MealSubmission.school_id == current_user.school_id
-    ).order_by(MealSubmission.created_at.desc()).all()
+    ).order_by(MealSubmission.id.desc()).all()
     
     images = db.query(ImageSubmission).filter(
         ImageSubmission.school_id == current_user.school_id
-    ).order_by(ImageSubmission.created_at.desc()).all()
+    ).order_by(ImageSubmission.id.desc()).all()
 
     # Also fetch humidity sensor reading if available and hardware is online
     latest_sensor = None
@@ -257,6 +262,16 @@ def upload_school_image(
     
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
+
+    # Ensure file is available in both backend/uploads and temp/uploads
+    for extra_dir in [os.path.join(_backend_dir, "uploads"), os.path.join(_tmp_dir, "uploads")]:
+        try:
+            os.makedirs(extra_dir, exist_ok=True)
+            extra_path = os.path.join(extra_dir, unique_filename)
+            if os.path.abspath(extra_path) != os.path.abspath(file_path) and not os.path.exists(extra_path):
+                shutil.copy2(file_path, extra_path)
+        except Exception:
+            pass
         
     image_url = f"/uploads/{unique_filename}"
     
@@ -540,6 +555,16 @@ def upload_student_batch(
 
         with open(f_path, "wb") as buf:
             shutil.copyfileobj(f.file, buf)
+
+        # Ensure file is available in both backend/uploads and temp/uploads
+        for extra_dir in [os.path.join(_backend_dir, "uploads"), os.path.join(_tmp_dir, "uploads")]:
+            try:
+                os.makedirs(extra_dir, exist_ok=True)
+                extra_path = os.path.join(extra_dir, unique_name)
+                if os.path.abspath(extra_path) != os.path.abspath(f_path) and not os.path.exists(extra_path):
+                    shutil.copy2(f_path, extra_path)
+            except Exception:
+                pass
 
         desc = f"[Angle {angle_num}/8: {angle_lbl}] Student Dining Attendance Headcount"
 

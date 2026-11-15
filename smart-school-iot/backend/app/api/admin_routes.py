@@ -54,7 +54,7 @@ def get_admin_dashboard(current_user: User = Depends(require_admin), db: Session
     recent_alerts = db.query(Alert).order_by(Alert.created_at.desc()).limit(10).all()
     
     # Recent image submissions
-    recent_images = db.query(ImageSubmission).order_by(ImageSubmission.created_at.desc()).limit(10).all()
+    recent_images = db.query(ImageSubmission).order_by(ImageSubmission.id.desc()).limit(10).all()
     
     # Recent meal submissions
     recent_meals = db.query(MealSubmission).order_by(MealSubmission.created_at.desc()).limit(10).all()
@@ -198,7 +198,7 @@ def get_school_details(school_id: int, current_user: User = Depends(require_admi
     
     alerts = db.query(Alert).filter(Alert.school_id == school.id).order_by(Alert.created_at.desc()).limit(20).all()
     meals = db.query(MealSubmission).filter(MealSubmission.school_id == school.id).order_by(MealSubmission.created_at.desc()).limit(10).all()
-    images = db.query(ImageSubmission).filter(ImageSubmission.school_id == school.id).order_by(ImageSubmission.created_at.desc()).limit(15).all()
+    images = db.query(ImageSubmission).filter(ImageSubmission.school_id == school.id).order_by(ImageSubmission.id.desc()).limit(15).all()
     
     return {
         "school": school,
@@ -349,7 +349,7 @@ def get_admin_meals(
     if status_filter:
         query_img = query_img.filter(ImageSubmission.status == status_filter)
         
-    images = query_img.order_by(ImageSubmission.created_at.desc()).all()
+    images = query_img.order_by(ImageSubmission.id.desc()).all()
     
     # Enrich image models with school name
     enriched_images = []
@@ -540,7 +540,7 @@ def get_admin_reports(
     if status_filter:
         img_query = img_query.filter(ImageSubmission.status == status_filter)
 
-    uploads_records = img_query.order_by(ImageSubmission.created_at.desc()).limit(200).all()
+    uploads_records = img_query.order_by(ImageSubmission.id.desc()).limit(200).all()
     school_map = {s.id: s for s in schools}
     
     uploads_data = []
@@ -898,14 +898,14 @@ def get_inspector_progress(
         today_images = db.query(ImageSubmission).filter(
             ImageSubmission.school_id == school.id,
             ImageSubmission.created_at >= today_start
-        ).order_by(ImageSubmission.created_at.desc()).all()
+        ).order_by(ImageSubmission.id.desc()).all()
         
         # Check latest image overall if no today image
         latest_overall_img = None
         if not today_images:
             latest_overall_img = db.query(ImageSubmission).filter(
                 ImageSubmission.school_id == school.id
-            ).order_by(ImageSubmission.created_at.desc()).first()
+            ).order_by(ImageSubmission.id.desc()).first()
             
         # Determine verification status
         verification_status = "NO_SUBMISSION"

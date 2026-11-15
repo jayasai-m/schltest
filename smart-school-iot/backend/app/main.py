@@ -21,10 +21,15 @@ from .api.message_routes import router as message_router
 Base.metadata.create_all(bind=engine)
 
 import tempfile
+from fastapi.responses import FileResponse, Response
+
 _tmp_dir = "/tmp" if os.name != "nt" else tempfile.gettempdir()
 _backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_repo_root = os.path.dirname(os.path.dirname(_backend_dir))
 _default_uploads = os.path.join(_tmp_dir, "uploads") if os.getenv("VERCEL") else os.path.join(_backend_dir, "uploads")
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", _default_uploads)
+if not os.path.isabs(UPLOAD_DIR):
+    UPLOAD_DIR = os.path.join(_backend_dir, UPLOAD_DIR)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = FastAPI(
@@ -41,6 +46,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Multi-directory image resolver to ensure newly uploaded and historical photos always serve
+@app.get("/uploads/{file_name}")
+def serve_uploaded_file(file_name: str):
+    candidate_paths = [
+        os.path.join(UPLOAD_DIR, file_name),
+        os.path.join(_backend_dir, "uploads", file_name),
+        os.path.join(_tmp_dir, "uploads", file_name),
+        os.path.join(_repo_root, "api", "bundled_uploads", file_name),
+        os.path.join(os.path.dirname(_backend_dir), "api", "bundled_uploads", file_name),
+        os.path.join("/tmp", "uploads", file_name)
+    ]
+    for p in candidate_paths:
+        if os.path.isfile(p):
+            media_type = "image/jpeg"
+            if file_name.lower().endswith(".png"):
+                media_type = "image/png"
+            elif file_name.lower().endswith(".webp"):
+                media_type = "image/webp"
+            return FileResponse(p, media_type=media_type)
+    return Response(status_code=404, content="Image not found")
 
 # Mount static uploads directory for images
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
