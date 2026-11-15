@@ -453,7 +453,7 @@ def upload_school_image(
     return {
         "status": "success",
         "message": f"Image uploaded successfully.{cv_info} Awaiting administrator verification.",
-        "image": submission
+        "image": ImageSubmissionResponse.model_validate(submission).model_dump(mode="json")
     }
 
 
@@ -607,7 +607,7 @@ def upload_student_batch(
         "status": "success",
         "message": f"Successfully uploaded all {len(created_submissions)} angle photos. AI student headcount completed successfully.",
         "count": len(created_submissions),
-        "images": created_submissions
+        "images": [ImageSubmissionResponse.model_validate(s).model_dump(mode="json") for s in created_submissions]
     }
 
 @router.get("/alerts", response_model=List[AlertResponse])
